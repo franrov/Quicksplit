@@ -1,7 +1,9 @@
-import { Home, Zap, Wifi, ShoppingCart, CheckCircle2, CircleDashed } from "lucide-react";
+import { useNavigate } from "react-router";
+import { Plus, Home, Zap, Wifi, ShoppingCart, CheckCircle2, CircleDashed } from "lucide-react";
 
 export function HouseholdExpensesScreen() {
-  
+  const navigate = useNavigate();
+
   const expenses = [
     { id: 1, title: 'Rent', amount: '1,200', icon: Home, paidBy: 'Ariana', status: 'paid' },
     { id: 2, title: 'WiFi', amount: '60', icon: Wifi, status: 'pending' },
@@ -17,11 +19,13 @@ export function HouseholdExpensesScreen() {
   ];
 
   return (
-    <div className="p-6 space-y-8 pb-12">
+    <div className="p-6 space-y-8 pb-12 flex flex-col min-h-full">
       
       {/* Monthly Balance Summary */}
       <section>
-        <h2 className="text-xl font-black text-gray-900 mb-4 px-1 tracking-tight">Monthly Balance</h2>
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-xl font-black text-gray-900 tracking-tight">Monthly Balance</h2>
+        </div>
         <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-5">
           {balances.map((b, i) => (
             <div key={b.name} className={`flex items-center justify-between ${i !== balances.length - 1 ? 'pb-5 border-b border-gray-50' : ''}`}>
@@ -41,13 +45,26 @@ export function HouseholdExpensesScreen() {
       </section>
 
       {/* Shared Expenses */}
-      <section>
-        <h2 className="text-xl font-black text-gray-900 mb-4 px-1 tracking-tight">This Month's Bills</h2>
+      <section className="flex-1">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-xl font-black text-gray-900 tracking-tight">This Month's Bills</h2>
+          <button 
+            onClick={() => navigate('/household/new')}
+            className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-full"
+          >
+            <Plus size={16} strokeWidth={3} />
+            Add
+          </button>
+        </div>
         <div className="space-y-3">
           {expenses.map((exp) => {
             const Icon = exp.icon;
             return (
-              <div key={exp.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4">
+              <div 
+                key={exp.id} 
+                onClick={() => navigate(`/household/${exp.id}`)}
+                className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all hover:border-gray-200"
+              >
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${exp.status === 'settled' || exp.status === 'paid' ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-600'}`}>
                   <Icon size={24} />
                 </div>

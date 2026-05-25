@@ -1,17 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Camera, ScanLine } from "lucide-react";
+import { Camera } from "lucide-react";
 
 export function NewSplitScreen() {
   const navigate = useNavigate();
-  const [scanned, setScanned] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
 
   const handleScan = () => {
-    setScanned(true);
-    setTitle("Walmart Groceries");
-    setAmount("42.60");
+    navigate('/new/scan');
   };
 
   const handleContinue = () => {
@@ -31,13 +28,6 @@ export function NewSplitScreen() {
           <Camera size={36} strokeWidth={1.5} />
           <span className="font-bold">Scan Receipt</span>
         </button>
-
-        {scanned && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 text-emerald-800 animate-in fade-in slide-in-from-top-2">
-            <ScanLine className="text-emerald-600 shrink-0" size={24} />
-            <p className="text-sm font-bold">Receipt detected: Walmart - $42.60</p>
-          </div>
-        )}
 
         <div className="flex items-center gap-4 py-2">
           <div className="h-px bg-gray-200 flex-1"></div>
