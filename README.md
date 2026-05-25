@@ -1,6 +1,8 @@
 
 # Quicksplit
 
+Your hub for shared expenses
+
 ## Running the code
 
 Run `npm i` to install the dependencies.
