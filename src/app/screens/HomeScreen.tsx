@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Receipt, Home as HomeIcon, CheckCircle2, CircleDashed } from "lucide-react";
