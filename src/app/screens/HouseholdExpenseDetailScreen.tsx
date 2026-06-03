@@ -1,3 +1,5 @@
+import React from "react";
+
 import { useNavigate } from "react-router";
 import { Wifi, Bell, CheckCircle2, CalendarDays, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
