@@ -166,7 +166,6 @@ export function HouseholdExpensesScreen() {
           ) : (
             splits.map((split) => {
               const settled = String(split.status).toLowerCase() === "settled";
-              const suspended = String(split.status).toLowerCase() === "suspended";
 
               return (
                 <div
@@ -178,8 +177,6 @@ export function HouseholdExpensesScreen() {
                     className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${
                       settled
                         ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                        : suspended
-                          ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                         : "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300"
                     }`}
                   >
@@ -199,17 +196,15 @@ export function HouseholdExpensesScreen() {
                     <div className="flex items-center gap-2 mt-1">
                       {settled ? (
                         <CheckCircle2 size={16} className="text-gray-400" />
-                      ) : suspended ? (
-                        <CircleDashed size={16} className="text-gray-400" />
                       ) : (
                         <CircleDashed size={16} className="text-orange-500" />
                       )}
                       <p
                         className={`text-sm capitalize ${
-                          settled || suspended ? "text-gray-500 font-bold" : "text-orange-600 font-bold"
+                          settled ? "text-gray-500 font-bold" : "text-orange-600 font-bold"
                         }`}
                       >
-                        {suspended ? (language === "es" ? "suspendido" : "suspended") : split.frequency ? split.frequency.replace("-", " ") : split.status}
+                        {split.frequency ? split.frequency.replace("-", " ") : split.status}
                       </p>
                     </div>
                   </div>

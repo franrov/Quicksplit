@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Bell, CalendarDays, CheckCircle2, Home, PauseCircle, Receipt, Repeat, Trash2 } from "lucide-react";
+import { Bell, CalendarDays, CheckCircle2, Home, Receipt, Repeat, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
@@ -61,15 +61,13 @@ export function HouseholdExpenseDetailScreen() {
 
   const participants = split?.participants || [];
   const splitStatus = String(split?.status || "").toLowerCase();
-  const isSuspended = splitStatus === "suspended";
   const isSettled = splitStatus === "settled";
-  const pendingCount = isSuspended ? 0 : participants.filter((participant) => participant.status !== "paid" && participant.status !== "suspended").length;
+  const pendingCount = participants.filter((participant) => participant.status !== "paid").length;
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
   const isPaymentOwner = Number(split?.payer_user_id || split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
-  const canMarkPaid = !isPaymentOwner && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
+  const canMarkPaid = !isPaymentOwner && myParticipant?.status !== "paid";
   const canDelete = isCreator;
-  const canSuspend = isCreator && !isSettled && !isSuspended;
   const creatorLabel = isCreator
     ? language === "es"
       ? "Creado por ti"
@@ -102,29 +100,6 @@ export function HouseholdExpenseDetailScreen() {
       }
     } finally {
       setIsPaying(false);
-    }
-  };
-
-  const handleSuspend = async () => {
-    if (!split || !currentUser?.id) return;
-
-    const shouldSuspend = window.confirm(
-      language === "es"
-        ? "Suspender este split? Los pagos pendientes y recordatorios se detendrán."
-        : "Suspend this split? Pending payments and reminders will stop."
-    );
-    if (!shouldSuspend) return;
-
-    try {
-      const response = await axios.patch(apiUrl(`/splits/${split.id}/suspend`), {
-        userId: currentUser.id,
-      });
-
-      setSplit(response.data);
-      toast.success(language === "es" ? "Split suspendido" : "Split suspended");
-    } catch (error: any) {
-      console.error("Error suspending split:", error);
-      toast.error(error.response?.data?.message || (language === "es" ? "No se pudo suspender" : "Could not suspend split"));
     }
   };
 
@@ -247,11 +222,7 @@ export function HouseholdExpenseDetailScreen() {
           }`}
         >
           {pendingCount === 0
-            ? isSuspended
-              ? language === "es"
-                ? "Suspendido"
-                : "Suspended"
-              : language === "es"
+            ? language === "es"
               ? "Saldado"
               : "Settled"
             : language === "es"
@@ -343,18 +314,8 @@ export function HouseholdExpenseDetailScreen() {
           </button>
         )}
       </div>
-      {(canSuspend || canDelete) && (
-        <div className={`grid gap-3 pt-5 pb-4 ${canSuspend && canDelete ? "grid-cols-2" : "grid-cols-1"}`}>
-          {canSuspend && (
-            <button
-              onClick={handleSuspend}
-              className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 text-white rounded-2xl p-4 font-bold shadow-[0_8px_24px_rgb(249,115,22,0.25)] active:scale-[0.98] transition-all flex justify-center items-center gap-2"
-            >
-              <PauseCircle size={20} />
-              {language === "es" ? "Suspender" : "Suspend"}
-            </button>
-          )}
-          {canDelete && (
+      {canDelete && (
+        <div className="grid gap-3 pt-5 pb-4 grid-cols-1">
             <button
               onClick={handleDelete}
               className="bg-red-500 hover:bg-red-600 disabled:bg-gray-200 text-white rounded-2xl p-4 font-bold shadow-[0_8px_24px_rgb(239,68,68,0.25)] active:scale-[0.98] transition-all flex justify-center items-center gap-2"
@@ -362,13 +323,12 @@ export function HouseholdExpenseDetailScreen() {
               <Trash2 size={20} />
               {language === "es" ? "Eliminar" : "Delete"}
             </button>
-          )}
         </div>
       )}
       <button
         onClick={() => navigate("/home")}
         className={`w-full bg-gray-900 dark:bg-gray-50 text-white dark:text-gray-950 rounded-2xl p-4 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all flex justify-center items-center gap-2 ${
-          canSuspend || canDelete ? "" : "mt-5"
+          canDelete ? "" : "mt-5"
         }`}
       >
         <Home size={20} />
