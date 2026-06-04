@@ -64,7 +64,7 @@ export function HouseholdExpenseDetailScreen() {
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
   const canMarkPaid = !isCreator && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
-  const canDelete = isCreator || isSettled;
+  const canDelete = isCreator;
   const canSuspend = isCreator && !isSettled && !isSuspended;
   const paymentAmount = Number(myParticipant?.amount || 0);
   const walletBalance = Number(currentUser?.wallet_balance ?? 1000);

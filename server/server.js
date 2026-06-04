@@ -1349,6 +1349,11 @@ app.delete("/splits/:id", (req, res) => {
 
       const isCreator = Number(split.user_id) === Number(userId);
       const isSettled = split.status === "settled";
+      const isRecurring = Boolean(split.is_recurring);
+
+      if (isRecurring && !isCreator) {
+        return res.status(403).json({ message: "Only the creator can delete a recurring split" });
+      }
 
       if (!isCreator && !isSettled) {
         return res.status(403).json({ message: "Only the creator can delete an active split" });
