@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { KeyRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { useLanguage } from "../context/LanguageContext";
@@ -103,16 +103,28 @@ function PasswordInput({
   onChange: (value: string) => void;
   placeholder: string;
 }) {
+  const [isVisible, setIsVisible] = useState(false);
+
   return (
     <div>
       <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{label}</label>
-      <input
-        type="password"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-4 text-gray-900 dark:text-gray-50 font-medium focus:outline-none focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-800 focus:border-gray-900 dark:focus:border-gray-200 transition-all shadow-sm"
-      />
+      <div className="relative">
+        <input
+          type={isVisible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-4 pr-14 text-gray-900 dark:text-gray-50 font-medium focus:outline-none focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-800 focus:border-gray-900 dark:focus:border-gray-200 transition-all shadow-sm"
+        />
+        <button
+          type="button"
+          onClick={() => setIsVisible((current) => !current)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all"
+          aria-label={isVisible ? "Hide password" : "Show password"}
+        >
+          {isVisible ? <EyeOff size={20} /> : <Eye size={20} />}
+        </button>
+      </div>
     </div>
   );
 }

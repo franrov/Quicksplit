@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { LogIn } from "lucide-react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { useLanguage } from "../context/LanguageContext";
@@ -12,6 +12,7 @@ export function LoginScreen() {
   const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleLogin = async () => {
@@ -59,13 +60,23 @@ export function LoginScreen() {
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">{t("password")}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Your password"
-              className="w-full bg-white border-2 border-gray-100 rounded-2xl px-4 py-4 text-gray-900 font-medium focus:outline-none focus:ring-4 focus:ring-gray-100 focus:border-gray-900 transition-all shadow-sm"
-            />
+            <div className="relative">
+              <input
+                type={isPasswordVisible ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Your password"
+                className="w-full bg-white border-2 border-gray-100 rounded-2xl px-4 py-4 pr-14 text-gray-900 font-medium focus:outline-none focus:ring-4 focus:ring-gray-100 focus:border-gray-900 transition-all shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setIsPasswordVisible((isVisible) => !isVisible)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all"
+                aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+              >
+                {isPasswordVisible ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
           </div>
         </div>
       </div>

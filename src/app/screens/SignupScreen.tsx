@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { UserPlus } from "lucide-react";
+import { Eye, EyeOff, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { useLanguage } from "../context/LanguageContext";
@@ -12,6 +12,7 @@ export function SignupScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
 
@@ -115,20 +116,30 @@ export function SignupScreen() {
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">{t("password")}</label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
-              }}
-              placeholder="Create a password"
-              aria-invalid={Boolean(errors.password)}
-              className={`w-full bg-white border-2 rounded-2xl px-4 py-4 text-gray-900 font-medium focus:outline-none focus:ring-4 focus:ring-gray-100 focus:border-gray-900 transition-all shadow-sm ${
-                errors.password ? "border-red-300" : "border-gray-100"
-              }`}
-            />
+            <div className="relative">
+              <input
+                type={isPasswordVisible ? "text" : "password"}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
+                }}
+                placeholder="Create a password"
+                aria-invalid={Boolean(errors.password)}
+                className={`w-full bg-white border-2 rounded-2xl px-4 py-4 pr-14 text-gray-900 font-medium focus:outline-none focus:ring-4 focus:ring-gray-100 focus:border-gray-900 transition-all shadow-sm ${
+                  errors.password ? "border-red-300" : "border-gray-100"
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setIsPasswordVisible((isVisible) => !isVisible)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all"
+                aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+              >
+                {isPasswordVisible ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
             {errors.password && <p className="mt-2 text-sm font-bold text-red-500">{errors.password}</p>}
           </div>
         </div>

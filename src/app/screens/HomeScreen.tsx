@@ -219,16 +219,16 @@ export function HomeScreen() {
       <div className="flex items-center justify-end gap-2 px-6 pt-4 pb-2">
         <button
           onClick={() => navigate("/notifications")}
-          className="relative w-10 h-10 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 active:bg-gray-50 transition-colors"
+          className="relative w-10 h-10 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-50 active:bg-gray-50 dark:active:bg-gray-800 transition-colors"
         >
           <Bell size={18} />
           {unreadNotificationCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
+            <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white dark:border-gray-900" />
           )}
         </button>
         <button
           onClick={() => navigate("/profile")}
-          className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white shadow-sm active:bg-gray-700 transition-colors"
+          className="w-10 h-10 rounded-full bg-gray-900 dark:bg-gray-50 border border-gray-900 dark:border-white flex items-center justify-center text-white dark:text-gray-950 shadow-sm active:bg-gray-700 dark:active:bg-gray-200 transition-colors"
         >
           <span className="text-xs font-black">{initials}</span>
         </button>
