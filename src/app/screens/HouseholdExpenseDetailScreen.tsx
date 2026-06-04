@@ -19,6 +19,8 @@ type Split = {
   id: number;
   user_id: number;
   creator_name?: string;
+  payer_user_id?: number;
+  payer_name?: string;
   title: string;
   amount: number;
   status: string;
@@ -63,8 +65,9 @@ export function HouseholdExpenseDetailScreen() {
   const isSettled = splitStatus === "settled";
   const pendingCount = isSuspended ? 0 : participants.filter((participant) => participant.status !== "paid" && participant.status !== "suspended").length;
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
+  const isPaymentOwner = Number(split?.payer_user_id || split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
-  const canMarkPaid = !isCreator && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
+  const canMarkPaid = !isPaymentOwner && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
   const canDelete = isCreator;
   const canSuspend = isCreator && !isSettled && !isSuspended;
   const creatorLabel = isCreator

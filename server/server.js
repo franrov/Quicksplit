@@ -81,6 +81,8 @@ const formatSplit = (split) => ({
   status: split.status,
   method: split.method || "equal",
   payer: split.payer || "me",
+  payer_user_id: split.payer_user_id || split.user_id,
+  payer_name: split.payer_name || split.creator_name || null,
   is_recurring: Boolean(split.is_recurring),
   frequency: split.frequency || null,
   next_due_date: split.next_due_date || null,
@@ -412,6 +414,22 @@ const createInviteNotifications = async ({ splitId, splitTitle, participants, ow
   return invitedParticipants.length;
 };
 
+const createPayerInviteNotification = ({ userId, splitId, splitTitle, amount, payerName }) => {
+  return runDb(
+    "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, message, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+    [
+      userId,
+      splitId,
+      "payer_invite",
+      "payer",
+      payerName,
+      amount,
+      splitTitle,
+      "You were selected to pay this split upfront.",
+    ]
+  );
+};
+
 const createPaidNotification = ({ userId, splitId, splitTitle, amount, participantName = "Split" }) => {
   db.run(
     "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
@@ -440,6 +458,8 @@ db.serialize(() => {
       status TEXT DEFAULT 'pending',
       method TEXT DEFAULT 'equal',
       payer TEXT DEFAULT 'me',
+      payer_user_id INTEGER,
+      payer_name TEXT,
       is_recurring INTEGER DEFAULT 0,
       frequency TEXT,
       next_due_date TEXT,
@@ -490,6 +510,8 @@ db.serialize(() => {
     addColumnIfMissing("splits", columns, "user_id", "INTEGER");
     addColumnIfMissing("splits", columns, "method", "TEXT DEFAULT 'equal'");
     addColumnIfMissing("splits", columns, "payer", "TEXT DEFAULT 'me'");
+    addColumnIfMissing("splits", columns, "payer_user_id", "INTEGER");
+    addColumnIfMissing("splits", columns, "payer_name", "TEXT");
     addColumnIfMissing("splits", columns, "is_recurring", "INTEGER DEFAULT 0");
     addColumnIfMissing("splits", columns, "frequency", "TEXT");
     addColumnIfMissing("splits", columns, "next_due_date", "TEXT");
@@ -955,9 +977,25 @@ app.get("/splits/:id", (req, res) => {
 });
 
 app.post("/splits", (req, res) => {
-  const { title, amount, status, userId, method, payer, participants, isRecurring, frequency, nextDueDate } = req.body;
+  const {
+    title,
+    amount,
+    status,
+    userId,
+    method,
+    payer,
+    payerUserId,
+    payerName,
+    participants,
+    isRecurring,
+    frequency,
+    nextDueDate,
+  } = req.body;
   const splitStatus = status || "pending";
   const totalAmount = toMoney(amount);
+  const selectedPayerUserId = Number(payerUserId || userId);
+  const selectedPayerName = payerName || null;
+  const isExternalPayer = (payer || "me") === "other" && selectedPayerUserId && selectedPayerUserId !== Number(userId);
 
   if (!userId || !title || !totalAmount) {
     return res.status(400).json({ message: "userId, title, and amount are required" });
@@ -973,14 +1011,16 @@ app.post("/splits", (req, res) => {
     })
     .then((walletBalance) => {
   db.run(
-    "INSERT INTO splits(user_id, title, amount, status, method, payer, is_recurring, frequency, next_due_date, participants_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO splits(user_id, title, amount, status, method, payer, payer_user_id, payer_name, is_recurring, frequency, next_due_date, participants_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       userId,
       title,
       totalAmount,
-      splitStatus,
+      isExternalPayer ? "awaiting_payer" : splitStatus,
       method || "equal",
       payer || "me",
+      selectedPayerUserId,
+      selectedPayerName,
       isRecurring ? 1 : 0,
       isRecurring ? frequency || "monthly" : null,
       isRecurring ? nextDueDate || formatDateOnly(new Date()) : null,
@@ -995,7 +1035,11 @@ app.post("/splits", (req, res) => {
       const storedParticipants = (Array.isArray(participants) ? participants : []).map((participant) => ({
         ...participant,
         status:
-          participant.userId && Number(participant.userId) !== Number(userId) && participant.status !== "paid"
+          isExternalPayer && Number(participant.userId) === Number(selectedPayerUserId)
+            ? "payer_invited"
+            : isExternalPayer
+            ? "waiting"
+            : participant.userId && Number(participant.userId) !== Number(userId) && participant.status !== "paid"
             ? "invited"
             : participant.status || "pending",
       }));
@@ -1015,12 +1059,22 @@ app.post("/splits", (req, res) => {
           )
         ));
 
-        await createInviteNotifications({
-          splitId,
-          splitTitle: title,
-          participants: storedParticipants,
-          ownerId: userId,
-        });
+        if (isExternalPayer) {
+          await createPayerInviteNotification({
+            userId: selectedPayerUserId,
+            splitId,
+            splitTitle: title,
+            amount: totalAmount,
+            payerName: selectedPayerName || "Selected payer",
+          });
+        } else {
+          await createInviteNotifications({
+            splitId,
+            splitTitle: title,
+            participants: storedParticipants,
+            ownerId: userId,
+          });
+        }
       } catch (notificationErr) {
         console.error("Error storing split participants/reminders:", notificationErr);
       }
@@ -1030,9 +1084,11 @@ app.post("/splits", (req, res) => {
         user_id: userId,
         title,
         amount: totalAmount,
-        status: splitStatus,
+        status: isExternalPayer ? "awaiting_payer" : splitStatus,
         method: method || "equal",
         payer: payer || "me",
+        payer_user_id: selectedPayerUserId,
+        payer_name: selectedPayerName,
         is_recurring: Boolean(isRecurring),
         frequency: isRecurring ? frequency || "monthly" : null,
         next_due_date: isRecurring ? nextDueDate || formatDateOnly(new Date()) : null,
@@ -1108,7 +1164,7 @@ app.post("/splits/:id/respond", (req, res) => {
             await runDb("UPDATE split_participants SET status = 'rejected', amount = 0 WHERE id = ?", [participant.id]);
             await runDb(
               "UPDATE split_participants SET amount = amount + ? WHERE split_id = ? AND user_id = ?",
-              [participant.amount, splitId, split.user_id]
+              [participant.amount, splitId, split.payer_user_id || split.user_id]
             );
             await runDb("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = 'invite'", [
               userId,
@@ -1143,6 +1199,73 @@ app.post("/splits/:id/respond", (req, res) => {
         }
       }
     );
+  });
+});
+
+app.post("/splits/:id/payer-response", (req, res) => {
+  const splitId = Number(req.params.id);
+  const { userId, response } = req.body;
+
+  if (!splitId || !userId || !["accepted", "rejected"].includes(response)) {
+    return res.status(400).json({ message: "split id, userId, and response are required" });
+  }
+
+  db.get("SELECT * FROM splits WHERE id = ? AND payer_user_id = ?", [splitId, userId], async (err, split) => {
+    if (err) {
+      return res.status(500).json({ message: "Could not load split" });
+    }
+
+    if (!split || split.status !== "awaiting_payer") {
+      return res.status(404).json({ message: "Payer approval not found" });
+    }
+
+    try {
+      if (response === "rejected") {
+        await runDb("DELETE FROM notifications WHERE split_id = ?", [splitId]);
+        await runDb("DELETE FROM split_participants WHERE split_id = ?", [splitId]);
+        await runDb("DELETE FROM splits WHERE id = ?", [splitId]);
+        return res.json({ id: splitId, response, deleted: true });
+      }
+
+      const walletBalance = await deductWallet(userId, split.amount);
+      await runDb("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = 'payer_invite'", [
+        userId,
+        splitId,
+      ]);
+      await runDb(
+        "UPDATE split_participants SET status = CASE WHEN user_id = ? THEN 'paid' WHEN status = 'waiting' THEN 'invited' ELSE status END WHERE split_id = ?",
+        [userId, splitId]
+      );
+      await runDb("UPDATE splits SET status = 'pending' WHERE id = ?", [splitId]);
+
+      const updatedSplit = await getDb("SELECT * FROM splits WHERE id = ?", [splitId]);
+      const participants = await getSplitParticipantsAsync(updatedSplit);
+      await createInviteNotifications({
+        splitId,
+        splitTitle: split.title,
+        participants,
+        ownerId: userId,
+      });
+      await createBalanceNotifications({
+        userId,
+        splitId,
+        splitTitle: split.title,
+        participants,
+        ownerId: userId,
+      });
+
+      res.json({
+        ...formatSplitWithParticipants({ ...updatedSplit, status: "pending" }, participants),
+        response,
+        wallet_balance: walletBalance,
+      });
+    } catch (approvalErr) {
+      console.error("Error responding to payer approval:", approvalErr);
+      res.status(approvalErr.statusCode || 500).json({
+        message: approvalErr.message || "Could not respond to payer approval",
+        wallet_balance: approvalErr.walletBalance,
+      });
+    }
   });
 });
 
@@ -1294,8 +1417,10 @@ app.patch("/splits/:id/pay", (req, res) => {
             return res.status(500).json({ message: "Could not mark paid" });
           }
 
+          const paymentOwnerId = split.payer_user_id || split.user_id;
+
           Promise.resolve()
-            .then(() => (Number(split.user_id) === Number(userId) ? walletBalance : depositWallet(split.user_id, paidAmount)))
+            .then(() => (Number(paymentOwnerId) === Number(userId) ? walletBalance : depositWallet(paymentOwnerId, paidAmount)))
             .then((ownerWalletBalance) => {
           db.run("DELETE FROM notifications WHERE user_id = ? AND split_id = ? AND type IN (?, ?)", [
             userId,
@@ -1318,7 +1443,7 @@ app.patch("/splits/:id/pay", (req, res) => {
                 [nextStatus, splitId],
                 () => {
                   createPaidNotification({
-                    userId: split.user_id,
+                    userId: paymentOwnerId,
                     splitId,
                     splitTitle: split.title,
                     amount: paidAmount,

@@ -10,7 +10,7 @@ import { apiUrl } from "../api";
 type Notification = {
   id: number;
   split_id: number;
-  type: "balance" | "invite" | "reminder" | "paid";
+  type: "balance" | "invite" | "payer_invite" | "reminder" | "paid";
   participant_id: string;
   participant_name: string;
   amount: number;
@@ -60,7 +60,7 @@ export function NotificationsScreen() {
   const handleOpenNotification = async (notification: Notification) => {
     if (!currentUser?.id) return;
 
-    if (notification.type === "invite") {
+    if (notification.type === "invite" || notification.type === "payer_invite") {
       navigate("/home");
       return;
     }
@@ -210,11 +210,16 @@ function NotifCard({
 }) {
   const isPaid = notif.type === "paid";
   const isInvite = notif.type === "invite";
+  const isPayerInvite = notif.type === "payer_invite";
   const isReminderMessage = notif.type === "reminder";
   const amount = Number(notif.amount || 0).toFixed(2);
   const isCurrentUser = notif.participant_id === "me";
   const title =
-    isInvite
+    isPayerInvite
+      ? language === "es"
+        ? `Solicitud de pago: ${notif.split_title}`
+        : `Payment request: ${notif.split_title}`
+      : isInvite
       ? language === "es"
         ? `Invitación: ${notif.split_title}`
         : `Split invite: ${notif.split_title}`
@@ -234,7 +239,11 @@ function NotifCard({
             ? `You owe $${amount}`
             : `${notif.participant_name} owes you $${amount}`;
   const subtitle =
-    isInvite
+    isPayerInvite
+      ? language === "es"
+        ? `Monto a pagar: $${amount}. Responde desde inicio.`
+        : `Amount to fund: $${amount}. Respond from Home.`
+      : isInvite
       ? language === "es"
         ? `Tu parte: $${amount}. Responde desde inicio.`
         : `Your share: $${amount}. Respond from Home.`

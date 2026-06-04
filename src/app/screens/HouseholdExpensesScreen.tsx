@@ -17,6 +17,8 @@ type Split = {
   id: number;
   user_id: number;
   creator_name?: string;
+  payer_user_id?: number;
+  payer_name?: string;
   title: string;
   amount: number;
   status: string;
@@ -58,14 +60,16 @@ export function HouseholdExpensesScreen() {
     splits.forEach((split) => {
       const participants = Array.isArray(split.participants) ? split.participants : [];
       if (String(split.status).toLowerCase() === "suspended") return;
+      if (String(split.status).toLowerCase() === "awaiting_payer") return;
+      const paymentOwnerId = split.payer_user_id || split.user_id;
 
       participants.forEach((participant) => {
         if (participant.status === "paid") return;
 
         const isCurrentUser = Number(participant.userId) === Number(currentUser?.id);
-        const isCreator = Number(split.user_id) === Number(currentUser?.id);
-        if (isCurrentUser && !isCreator) {
-          const key = `owe-${split.user_id}`;
+        const isPaymentOwner = Number(paymentOwnerId) === Number(currentUser?.id);
+        if (isCurrentUser && !isPaymentOwner) {
+          const key = `owe-${paymentOwnerId}`;
           const existing = totals.get(key) || {
             name: language === "es" ? "Tú" : "You",
             amount: 0,
@@ -73,7 +77,7 @@ export function HouseholdExpensesScreen() {
           };
           existing.amount += Number(participant.amount) || 0;
           totals.set(key, existing);
-        } else if (isCreator && !isCurrentUser && participant.userId) {
+        } else if (isPaymentOwner && !isCurrentUser && participant.userId) {
           const key = `owed-${participant.userId}`;
           const existing = totals.get(key) || {
             name: participant.name.replace(" (You)", ""),

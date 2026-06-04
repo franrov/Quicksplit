@@ -129,7 +129,7 @@ export function ReviewSplitScreen() {
       splitData.payer === "me"
         ? "me"
         : splitData.payer === "other"
-          ? splitData.people[0]?.id || "me"
+          ? splitData.selectedPayer?.id || splitData.people[0]?.id || "me"
           : null;
 
     const participants = participantIds.map((id) => {
@@ -162,6 +162,14 @@ export function ReviewSplitScreen() {
         status: participants.some((participant) => participant.status === "pending") ? "pending" : "settled",
         method: splitData.method,
         payer: splitData.payer,
+        payerUserId:
+          splitData.payer === "other"
+            ? splitData.selectedPayer?.userId
+            : currentUser.id,
+        payerName:
+          splitData.payer === "other"
+            ? splitData.selectedPayer?.name
+            : currentUser.name,
         participants,
       });
       updateStoredWalletBalance(response.data.wallet_balance);

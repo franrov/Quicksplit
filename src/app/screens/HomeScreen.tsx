@@ -42,13 +42,15 @@ export function HomeScreen() {
       const participants = Array.isArray(split.participants) ? split.participants : [];
 
       if (String(split.status).toLowerCase() === "suspended") return totals;
+      if (String(split.status).toLowerCase() === "awaiting_payer") return totals;
+      const paymentOwnerId = split.payer_user_id || split.user_id;
 
       participants.forEach((participant: any) => {
         if (participant.status !== "pending") return;
 
-        if (Number(participant.userId) === Number(currentUser?.id) && Number(split.user_id) !== Number(currentUser?.id)) {
+        if (Number(participant.userId) === Number(currentUser?.id) && Number(paymentOwnerId) !== Number(currentUser?.id)) {
           totals.youOwe += Number(participant.amount) || 0;
-        } else if (Number(split.user_id) === Number(currentUser?.id) && Number(participant.userId) !== Number(currentUser?.id)) {
+        } else if (Number(paymentOwnerId) === Number(currentUser?.id) && Number(participant.userId) !== Number(currentUser?.id)) {
           totals.youAreOwed += Number(participant.amount) || 0;
         }
       });
@@ -95,7 +97,7 @@ export function HomeScreen() {
     axios
       .get(apiUrl(`/notifications?userId=${currentUser.id}`))
       .then((response) => {
-        const invite = response.data.find((notification: any) => notification.type === "invite" && !notification.is_read);
+        const invite = response.data.find((notification: any) => ["invite", "payer_invite"].includes(notification.type) && !notification.is_read);
         setSplitInvite(invite || null);
       })
       .catch((error) => {
@@ -120,7 +122,7 @@ export function HomeScreen() {
     setWalletBalance(Number(walletResponse.data.wallet_balance ?? 1000));
     updateStoredWalletBalance(walletResponse.data.wallet_balance);
     setSplitInvite(
-      notificationsResponse.data.find((notification: any) => notification.type === "invite" && !notification.is_read) || null
+      notificationsResponse.data.find((notification: any) => ["invite", "payer_invite"].includes(notification.type) && !notification.is_read) || null
     );
   };
 
@@ -128,16 +130,21 @@ export function HomeScreen() {
     if (!currentUser?.id || !splitInvite?.split_id) return;
 
     try {
-      await axios.post(apiUrl(`/splits/${splitInvite.split_id}/respond`), {
+      const endpoint = splitInvite.type === "payer_invite" ? "payer-response" : "respond";
+      const apiResponse = await axios.post(apiUrl(`/splits/${splitInvite.split_id}/${endpoint}`), {
         userId: currentUser.id,
         response,
       });
+      updateStoredWalletBalance(apiResponse.data.wallet_balance);
       toast.success(response === "accepted" ? "Split accepted" : "Split rejected");
       setSplitInvite(null);
       await refreshHomeData();
     } catch (error) {
       console.error("Error responding to invite:", error);
-      toast.error("Could not respond to split invite");
+      toast.error(error.response?.data?.message || "Could not respond to split invite");
+      if (error.response?.status === 402) {
+        navigate("/wallet/deposit");
+      }
     }
   };
 
@@ -186,15 +193,17 @@ export function HomeScreen() {
               <Receipt size={28} />
             </div>
             <p className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">
-              Split Invite
+              {splitInvite.type === "payer_invite" ? "Payment Request" : "Split Invite"}
             </p>
             <h2 className="text-2xl font-black text-gray-900 dark:text-gray-50 mb-2">{splitInvite.split_title}</h2>
             <p className="text-gray-500 dark:text-gray-400 font-medium mb-5">
-              You were added to this split for{" "}
+              {splitInvite.type === "payer_invite" ? "You were selected to pay upfront for " : "You were added to this split for "}
               <span className="font-black text-gray-900 dark:text-gray-50">
                 ${Number(splitInvite.amount || 0).toFixed(2)}
               </span>
-              . Accept to join it, or reject and the creator will cover your share.
+              {splitInvite.type === "payer_invite"
+                ? ". Accept to fund it now, or reject and the split will be deleted."
+                : ". Accept to join it, or reject and the creator will cover your share."}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button
