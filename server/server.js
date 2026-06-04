@@ -390,9 +390,50 @@ db.serialize(() => {
       return;
     }
 
-    addColumnIfMissing("notifications", columns, "message", "TEXT");
-    addColumnIfMissing("notifications", columns, "tone", "TEXT");
-    db.run("UPDATE notifications SET type = 'balance' WHERE type = 'reminder' AND (message IS NULL OR message = '')");
+    const hasMessage = columns.some((column) => column.name === "message");
+    const hasTone = columns.some((column) => column.name === "tone");
+
+    const migrateOldReminderRows = () => {
+      db.run(
+        "UPDATE notifications SET type = 'balance' WHERE type = 'reminder' AND (message IS NULL OR message = '')",
+        [],
+        (updateErr) => {
+          if (updateErr) {
+            console.error("Error migrating old reminder notifications:", updateErr);
+          }
+        }
+      );
+    };
+
+    const ensureToneColumn = () => {
+      if (hasTone) {
+        migrateOldReminderRows();
+        return;
+      }
+
+      db.run("ALTER TABLE notifications ADD COLUMN tone TEXT", [], (toneErr) => {
+        if (toneErr) {
+          console.error("Error adding notifications.tone column:", toneErr);
+          return;
+        }
+
+        migrateOldReminderRows();
+      });
+    };
+
+    if (hasMessage) {
+      ensureToneColumn();
+      return;
+    }
+
+    db.run("ALTER TABLE notifications ADD COLUMN message TEXT", [], (messageErr) => {
+      if (messageErr) {
+        console.error("Error adding notifications.message column:", messageErr);
+        return;
+      }
+
+      ensureToneColumn();
+    });
   });
 });
 
