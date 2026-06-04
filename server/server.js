@@ -794,6 +794,20 @@ app.get("/notifications", (req, res) => {
       WHERE notifications.user_id = ?
       AND (notifications.split_id IS NULL OR splits.id IS NOT NULL)
       AND NOT (
+        notifications.type = 'invite'
+        AND (
+          COALESCE(split_participants.status, '') != 'invited'
+          OR COALESCE(splits.status, '') IN ('settled', 'suspended')
+        )
+      )
+      AND NOT (
+        notifications.type = 'payer_invite'
+        AND (
+          COALESCE(split_participants.status, '') != 'payer_invited'
+          OR COALESCE(splits.status, '') != 'awaiting_payer'
+        )
+      )
+      AND NOT (
         notifications.type IN ('balance', 'reminder')
         AND (
           COALESCE(splits.status, '') IN ('settled', 'suspended')
@@ -831,6 +845,20 @@ app.get("/notifications/unread-count", (req, res) => {
       WHERE notifications.user_id = ?
       AND notifications.is_read = 0
       AND (notifications.split_id IS NULL OR splits.id IS NOT NULL)
+      AND NOT (
+        notifications.type = 'invite'
+        AND (
+          COALESCE(split_participants.status, '') != 'invited'
+          OR COALESCE(splits.status, '') IN ('settled', 'suspended')
+        )
+      )
+      AND NOT (
+        notifications.type = 'payer_invite'
+        AND (
+          COALESCE(split_participants.status, '') != 'payer_invited'
+          OR COALESCE(splits.status, '') != 'awaiting_payer'
+        )
+      )
       AND NOT (
         notifications.type IN ('balance', 'reminder')
         AND (
@@ -1135,6 +1163,7 @@ app.post("/splits/:id/respond", (req, res) => {
         }
 
         if (!participant || participant.status !== "invited") {
+          db.run("DELETE FROM notifications WHERE user_id = ? AND split_id = ? AND type = 'invite'", [userId, splitId]);
           return res.status(404).json({ message: "Invitation not found" });
         }
 

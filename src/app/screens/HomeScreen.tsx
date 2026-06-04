@@ -142,6 +142,13 @@ export function HomeScreen() {
     } catch (error: any) {
       console.error("Error responding to invite:", error);
       if (error.response?.status === 404) {
+        if (splitInvite?.id) {
+          try {
+            await axios.delete(apiUrl(`/notifications/${splitInvite.id}?userId=${currentUser.id}`));
+          } catch (deleteError) {
+            console.error("Error deleting stale invite notification:", deleteError);
+          }
+        }
         setSplitInvite(null);
         await refreshHomeData();
         toast.error("This request is no longer available");
