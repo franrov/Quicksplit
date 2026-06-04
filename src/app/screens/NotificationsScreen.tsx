@@ -1,130 +1,242 @@
-import React from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Bell, CheckCircle2, Clock, ArrowRight } from "lucide-react";
+import { CheckCircle2, Clock } from "lucide-react";
+import axios from "axios";
+import { useLanguage } from "../context/LanguageContext";
+import { apiUrl } from "../api";
 
-const NOTIFICATIONS = [
-  {
-    id: 1,
-    type: "reminder",
-    title: "Ignacio owes you $30.00",
-    subtitle: '"Club" · Due today',
-    time: "10:30pm",
-    read: false,
-    section: "Today",
-  },
-  {
-    id: 2,
-    type: "paid",
-    title: "Edward paid $20.6",
-    subtitle: '"Chilis"',
-    time: "9:15am",
-    read: false,
-    section: "Today",
-  },
-  {
-    id: 3,
-    type: "reminder",
-    title: "Rent - April",
-    subtitle: "Expires in 2 days",
-    time: "Yesterday",
-    read: true,
-    section: "Yesterday",
-  },
-  {
-    id: 4,
-    type: "paid",
-    title: "Gabriel paid $20.6",
-    subtitle: '"Chilis"',
-    time: "Yesterday",
-    read: true,
-    section: "Yesterday",
-  },
-  {
-    id: 5,
-    type: "reminder",
-    title: "WiFi bill upcoming",
-    subtitle: "Internet-apa · Due in 5 days",
-    time: "Mon",
-    read: true,
-    section: "This Week",
-  },
-];
+type Notification = {
+  id: number;
+  split_id: number;
+  type: "reminder" | "paid";
+  participant_id: string;
+  participant_name: string;
+  amount: number;
+  split_title: string;
+  is_read: boolean;
+  created_at: string;
+};
 
 export function NotificationsScreen() {
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
+  const [filter, setFilter] = useState<"all" | "reminder">("all");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
 
-  const sections = ["Today", "Yesterday", "This Week"];
+  const loadNotifications = () => {
+    if (!currentUser?.id) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    setIsLoading(true);
+
+    axios
+      .get(apiUrl(`/notifications?userId=${currentUser.id}`))
+      .then((response) => {
+        setNotifications(response.data);
+        setErrorMessage("");
+      })
+      .catch((error) => {
+        console.error("Error loading notifications:", error);
+        setErrorMessage("Start the backend with npm run server");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, [currentUser?.id]);
+
+  const handleOpenNotification = async (notification: Notification) => {
+    if (!currentUser?.id) return;
+
+    try {
+      if (!notification.is_read) {
+        await axios.patch(apiUrl(`/notifications/${notification.id}/read`), {
+          userId: currentUser.id,
+        });
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    } finally {
+      navigate(`/split/${notification.split_id}`);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      await axios.patch(apiUrl("/notifications/read-all"), {
+        userId: currentUser.id,
+      });
+      setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true })));
+    } catch (error) {
+      console.error("Error marking notifications read:", error);
+    }
+  };
+
+  const visibleNotifications =
+    filter === "all" ? notifications : notifications.filter((notification) => notification.type === "reminder");
+  const unreadCount = notifications.filter((notification) => !notification.is_read).length;
+  const emptyTitle = filter === "all" ? t("noNotifications") : t("noReminders");
+  const emptyBody = filter === "all" ? t("noNotificationsBody") : t("noRemindersBody");
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-80px)] sm:min-h-[calc(800px-80px)]">
-      {/* Filter tabs */}
-      <div className="flex gap-2 px-6 pt-5 pb-3 border-b border-gray-100">
-        <button className="px-4 py-1.5 bg-gray-900 text-white rounded-full text-sm font-bold">
-          All
-        </button>
-        <button className="px-4 py-1.5 bg-gray-100 text-gray-500 rounded-full text-sm font-bold">
-          Reminders
-        </button>
+      <div className="flex items-center justify-between gap-3 px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex gap-2">
+          <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
+            {t("all")}
+          </FilterButton>
+          <FilterButton active={filter === "reminder"} onClick={() => setFilter("reminder")}>
+            {t("reminders")}
+          </FilterButton>
+        </div>
+
+        {unreadCount > 0 && (
+          <button
+            onClick={handleMarkAllRead}
+            className="text-xs font-black text-blue-600 dark:text-blue-300"
+          >
+            {t("markAllRead")}
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-        {sections.map((section) => {
-          const items = NOTIFICATIONS.filter((n) => n.section === section);
-          if (!items.length) return null;
-
-          return (
-            <div key={section}>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-                {section}
-              </p>
-              <div className="space-y-2">
-                {items.map((notif) => (
-                  <NotifCard key={notif.id} notif={notif} onPress={() => navigate("/")} />
-                ))}
-              </div>
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        {isLoading ? (
+          <EmptyState title={t("loadingNotifications")} body="" />
+        ) : errorMessage ? (
+          <EmptyState title={errorMessage} body="" />
+        ) : visibleNotifications.length === 0 ? (
+          <EmptyState title={emptyTitle} body={emptyBody} />
+        ) : (
+          <div>
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
+              {t("today")}
+            </p>
+            <div className="space-y-2">
+              {visibleNotifications.map((notification) => (
+                <NotifCard
+                  key={notification.id}
+                  language={language}
+                  notif={notification}
+                  onPress={() => handleOpenNotification(notification)}
+                />
+              ))}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function NotifCard({ notif, onPress }: { notif: any; onPress: () => void }) {
+function FilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors ${
+        active
+          ? "bg-gray-900 dark:bg-gray-50 text-white dark:text-gray-950"
+          : "bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="min-h-[360px] flex flex-col items-center justify-center text-center">
+      <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-400 dark:text-gray-500 flex items-center justify-center mb-4">
+        <CheckCircle2 size={30} strokeWidth={1.7} />
+      </div>
+      <p className="text-lg font-black text-gray-900 dark:text-gray-50">{title}</p>
+      {body && <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1 max-w-[220px]">{body}</p>}
+    </div>
+  );
+}
+
+function NotifCard({
+  notif,
+  language,
+  onPress,
+}: {
+  notif: Notification;
+  language: "en" | "es";
+  onPress: () => void;
+}) {
   const isPaid = notif.type === "paid";
+  const amount = Number(notif.amount || 0).toFixed(2);
+  const isCurrentUser = notif.participant_id === "me";
+  const title =
+    language === "es"
+      ? isPaid
+        ? `"${notif.split_title}" fue saldado`
+        : isCurrentUser
+          ? `Debes $${amount}`
+          : `${notif.participant_name} te debe $${amount}`
+      : isPaid
+        ? `"${notif.split_title}" was settled`
+        : isCurrentUser
+          ? `You owe $${amount}`
+          : `${notif.participant_name} owes you $${amount}`;
+  const subtitle =
+    language === "es"
+      ? isPaid
+        ? `Total: $${Number(notif.amount || 0).toFixed(2)}`
+        : `"${notif.split_title}" · Pendiente`
+      : isPaid
+        ? `Total: $${Number(notif.amount || 0).toFixed(2)}`
+        : `"${notif.split_title}" · Pending`;
 
   return (
     <div
       onClick={onPress}
       className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer active:scale-[0.98] transition-all ${
-        notif.read
-          ? "bg-white border-gray-100"
-          : "bg-emerald-50/50 border-emerald-100/80 shadow-sm"
+        notif.is_read
+          ? "bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800"
+          : "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100/80 dark:border-emerald-900/40 shadow-sm"
       }`}
     >
-      {/* Icon */}
       <div
         className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-          isPaid ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+          isPaid
+            ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300"
+            : "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300"
         }`}
       >
         {isPaid ? <CheckCircle2 size={20} /> : <Clock size={20} />}
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className={`font-bold text-sm ${notif.read ? "text-gray-700" : "text-gray-900"}`}>
-          {notif.title}
+        <p className={`font-bold text-sm ${notif.is_read ? "text-gray-700 dark:text-gray-200" : "text-gray-900 dark:text-gray-50"}`}>
+          {title}
         </p>
-        <p className="text-xs text-gray-400 font-medium mt-0.5">{notif.subtitle}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mt-0.5">{subtitle}</p>
       </div>
 
-      {/* Time + unread dot */}
       <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <p className="text-xs text-gray-400 font-medium">{notif.time}</p>
-        {!notif.read && (
-          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-        )}
+        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">{language === "es" ? "Hoy" : "Today"}</p>
+        {!notif.is_read && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
       </div>
     </div>
   );

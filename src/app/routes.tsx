@@ -16,13 +16,18 @@ import { AddRecurringExpenseScreen } from "./screens/AddRecurringExpenseScreen";
 import { NotificationsScreen } from "./screens/NotificationsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { AddPaymentMethodScreen } from "./screens/AddPaymentMethodScreen";
+import { LoginScreen } from "./screens/LoginScreen";
+import { SignupScreen } from "./screens/SignupScreen";
+import { ChangePasswordScreen } from "./screens/ChangePasswordScreen";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     Component: MobileLayout,
     children: [
-      { index: true, Component: HomeScreen },
+      { index: true, Component: LoginScreen },
+      { path: "signup", Component: SignupScreen },
+      { path: "home", Component: HomeScreen },
       { path: "new", Component: NewSplitScreen },
       { path: "new/scan", Component: ScanReceiptScreen },
       { path: "new/people", Component: SelectPeopleScreen },
@@ -37,6 +42,7 @@ export const router = createBrowserRouter([
       { path: "household/:id", Component: HouseholdExpenseDetailScreen },
       { path: "notifications", Component: NotificationsScreen },
       { path: "profile", Component: ProfileScreen },
+      { path: "profile/change-password", Component: ChangePasswordScreen },
       { path: "payment-method/new", Component: AddPaymentMethodScreen },
     ],
   },

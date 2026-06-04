@@ -2,10 +2,14 @@ import { useLocation, useNavigate } from "react-router";
 import { CheckCircle, Edit2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
+import { apiUrl } from "../api";
+import { useLanguage } from "../context/LanguageContext";
 
 export function ReviewSplitScreen() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const location = useLocation();
+  const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
   const splitData = location.state || {
     title: "Unknown",
     amount: "0",
@@ -30,16 +34,94 @@ export function ReviewSplitScreen() {
   };
 
   const handleCreate = async () => {
+    if (!currentUser?.id) {
+      toast.error("Please log in before creating a split");
+      navigate("/", { replace: true });
+      return;
+    }
+
+    const participantIds = ["me", ...splitData.people.map((person: any) => person.id)];
+    const paidParticipantId =
+      splitData.payer === "me"
+        ? "me"
+        : splitData.payer === "other"
+          ? splitData.people[0]?.id || "me"
+          : null;
+
+    const participants = participantIds.map((id) => {
+      const person = id === "me" ? { name: currentUser.name || "You" } : splitData.people.find((p: any) => p.id === id);
+      let amount = 0;
+
+      if (splitData.method === "equal") {
+        amount = totalAmount / participantIds.length;
+      } else if (splitData.method === "percentage") {
+        const pct = parseFloat(splitData.assignedValues[id]) || 0;
+        amount = totalAmount * (pct / 100);
+      } else {
+        amount = parseFloat(splitData.assignedValues[id]) || 0;
+      }
+
+      return {
+        id,
+        userId: id === "me" ? currentUser.id : person?.userId,
+        name: id === "me" ? `${person.name} (You)` : person?.name || "Unknown",
+        amount: Number(amount.toFixed(2)),
+        status: splitData.payer === "multiple" || id === paidParticipantId ? "paid" : "pending",
+      };
+    });
+
     try {
-      const response = await axios.post("http://localhost:3001/splits", {
+      const response = await axios.post(apiUrl("/splits"), {
+        userId: currentUser.id,
         title: splitData.title,
         amount: totalAmount,
-        status: "pending",
+        status: participants.some((participant) => participant.status === "pending") ? "pending" : "settled",
+        method: splitData.method,
+        payer: splitData.payer,
+        participants,
       });
+      const pendingParticipants = participants.filter((participant) => participant.status !== "paid");
+      const peopleWhoOweYou = pendingParticipants.filter((participant) => participant.id !== "me");
+      const youOwe = pendingParticipants.find((participant) => participant.id === "me");
 
-      toast.success("Split created successfully!", {
-        duration: 3000,
-      });
+      if (peopleWhoOweYou.length > 0) {
+        const firstPerson = peopleWhoOweYou[0];
+        const extraCount = peopleWhoOweYou.length - 1;
+
+        toast.success(
+          language === "es"
+            ? `${firstPerson.name} te debe $${Number(firstPerson.amount).toFixed(2)}`
+            : `${firstPerson.name} owes you $${Number(firstPerson.amount).toFixed(2)}`,
+          {
+            description:
+              extraCount > 0
+                ? language === "es"
+                  ? `Y ${extraCount} más recibieron recordatorios.`
+                  : `And ${extraCount} more received reminders.`
+                : language === "es"
+                  ? "Recordatorio agregado a notificaciones."
+                  : "Reminder added to notifications.",
+            duration: 4000,
+          }
+        );
+      } else if (youOwe) {
+        toast(
+          language === "es"
+            ? `Debes $${Number(youOwe.amount).toFixed(2)}`
+            : `You owe $${Number(youOwe.amount).toFixed(2)}`,
+          {
+            description:
+              language === "es"
+                ? "Se agregó a tus notificaciones."
+                : "Added to your notifications.",
+            duration: 4000,
+          }
+        );
+      } else {
+        toast.success(language === "es" ? "Split creado correctamente." : "Split created successfully!", {
+          duration: 3000,
+        });
+      }
 
       navigate("/confirmation", {
         state: {

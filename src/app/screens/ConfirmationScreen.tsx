@@ -91,7 +91,7 @@ export function ConfirmationScreen() {
           </button>
         ) : (
           <button
-            onClick={() => navigate("/split/new", { replace: true })}
+            onClick={() => navigate(`/split/${splitData.id}`, { replace: true })}
             className="w-full bg-emerald-500 text-white rounded-2xl p-4 font-bold text-lg shadow-[0_8px_30px_rgb(16,185,129,0.3)] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <ListChecks size={22} />
@@ -100,7 +100,7 @@ export function ConfirmationScreen() {
         )}
 
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/home")}
           className="w-full bg-gray-100 text-gray-800 rounded-2xl p-4 font-bold text-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
           <Home size={22} />

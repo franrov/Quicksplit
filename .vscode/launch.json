@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "QuickSplit: Run App",
-      "type": "chrome",
+      "type": "pwa-msedge",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/src",

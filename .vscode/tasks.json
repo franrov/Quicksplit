@@ -28,7 +28,7 @@
       "label": "QuickSplit: frontend",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "dev"],
+      "args": ["run", "dev:host"],
       "isBackground": true,
       "problemMatcher": {
         "owner": "quicksplit-frontend",
