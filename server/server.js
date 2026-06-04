@@ -850,6 +850,27 @@ app.patch("/notifications/:id/read", (req, res) => {
   );
 });
 
+app.delete("/notifications/:id", (req, res) => {
+  const notificationId = Number(req.params.id);
+  const userId = Number(req.query.userId);
+
+  if (!notificationId || !userId) {
+    return res.status(400).json({ message: "notification id and userId are required" });
+  }
+
+  db.run("DELETE FROM notifications WHERE id = ? AND user_id = ?", [notificationId, userId], function (err) {
+    if (err) {
+      return res.status(500).json({ message: "Could not delete notification" });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    res.json({ id: notificationId });
+  });
+});
+
 app.patch("/notifications/read-all", (req, res) => {
   const { userId } = req.body;
 

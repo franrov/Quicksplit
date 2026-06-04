@@ -330,11 +330,11 @@ export function HouseholdExpenseDetailScreen() {
         )}
       </div>
       {(canSuspend || canDelete) && (
-        <div className={`grid gap-3 pb-4 ${canSuspend && canDelete ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid gap-3 pt-5 pb-4 ${canSuspend && canDelete ? "grid-cols-2" : "grid-cols-1"}`}>
           {canSuspend && (
             <button
               onClick={handleSuspend}
-              className="bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-300 border border-orange-100 dark:border-orange-900/50 rounded-2xl p-4 font-bold active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+              className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 text-white rounded-2xl p-4 font-bold shadow-[0_8px_24px_rgb(249,115,22,0.25)] active:scale-[0.98] transition-all flex justify-center items-center gap-2"
             >
               <PauseCircle size={20} />
               {language === "es" ? "Suspender" : "Suspend"}
@@ -343,7 +343,7 @@ export function HouseholdExpenseDetailScreen() {
           {canDelete && (
             <button
               onClick={handleDelete}
-              className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-300 border border-red-100 dark:border-red-900/50 rounded-2xl p-4 font-bold active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+              className="bg-red-500 hover:bg-red-600 disabled:bg-gray-200 text-white rounded-2xl p-4 font-bold shadow-[0_8px_24px_rgb(239,68,68,0.25)] active:scale-[0.98] transition-all flex justify-center items-center gap-2"
             >
               <Trash2 size={20} />
               {language === "es" ? "Eliminar" : "Delete"}

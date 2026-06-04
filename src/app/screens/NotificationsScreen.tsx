@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock, Trash2 } from "lucide-react";
 import axios from "axios";
+import { toast } from "sonner";
 import { useLanguage } from "../context/LanguageContext";
 import { apiUrl } from "../api";
 
@@ -90,6 +91,19 @@ export function NotificationsScreen() {
     }
   };
 
+  const handleDeleteNotification = async (notification: Notification) => {
+    if (!currentUser?.id) return;
+
+    try {
+      await axios.delete(apiUrl(`/notifications/${notification.id}?userId=${currentUser.id}`));
+      setNotifications((current) => current.filter((item) => item.id !== notification.id));
+      toast.success(language === "es" ? "Notificación eliminada" : "Notification deleted");
+    } catch (error: any) {
+      console.error("Error deleting notification:", error);
+      toast.error(error.response?.data?.message || (language === "es" ? "No se pudo eliminar" : "Could not delete notification"));
+    }
+  };
+
   const visibleNotifications =
     filter === "all" ? notifications : notifications.filter((notification) => notification.type === "reminder");
   const unreadCount = notifications.filter((notification) => !notification.is_read).length;
@@ -137,6 +151,7 @@ export function NotificationsScreen() {
                   language={language}
                   notif={notification}
                   onPress={() => handleOpenNotification(notification)}
+                  onDelete={() => handleDeleteNotification(notification)}
                 />
               ))}
             </div>
@@ -186,10 +201,12 @@ function NotifCard({
   notif,
   language,
   onPress,
+  onDelete,
 }: {
   notif: Notification;
   language: "en" | "es";
   onPress: () => void;
+  onDelete: () => void;
 }) {
   const isPaid = notif.type === "paid";
   const isInvite = notif.type === "invite";
@@ -260,6 +277,17 @@ function NotifCard({
       <div className="flex flex-col items-end gap-1.5 shrink-0">
         <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">{language === "es" ? "Hoy" : "Today"}</p>
         {!notif.is_read && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          className="mt-1 w-8 h-8 rounded-full flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 active:scale-95 transition-all"
+          aria-label={language === "es" ? "Eliminar notificación" : "Delete notification"}
+        >
+          <Trash2 size={16} />
+        </button>
       </div>
     </div>
   );
