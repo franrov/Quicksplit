@@ -53,6 +53,8 @@ const verifyPassword = (password, storedPassword) => {
 
 const isLegacyPlainPassword = (storedPassword) => !String(storedPassword).startsWith(`${PASSWORD_HASH_PREFIX}:`);
 
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email));
+
 const addColumnIfMissing = (tableName, columns, columnName, definition) => {
   const hasColumn = columns.some((column) => column.name === columnName);
   if (!hasColumn) {
@@ -544,14 +546,31 @@ db.serialize(() => {
 
 app.post("/auth/signup", (req, res) => {
   const { name, email, password } = req.body;
+  const trimmedName = String(name || "").trim();
+  const trimmedEmail = String(email || "").trim().toLowerCase();
+  const errors = {};
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: "Name, email, and password are required" });
+  if (!trimmedName) {
+    errors.name = "The Name field is required";
+  }
+
+  if (!trimmedEmail) {
+    errors.email = "The Email field is required";
+  } else if (!isValidEmail(trimmedEmail)) {
+    errors.email = "Enter a valid email address";
+  }
+
+  if (!password) {
+    errors.password = "The Password field is required";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: "Please fix the signup form errors", errors });
   }
 
   db.run(
     "INSERT INTO users(name, email, password, wallet_balance) VALUES (?, ?, ?, ?)",
-    [name.trim(), email.trim().toLowerCase(), hashPassword(password), 1000],
+    [trimmedName, trimmedEmail, hashPassword(password), 1000],
     function (err) {
       if (err) {
         if (err.message.includes("UNIQUE")) {
@@ -563,8 +582,8 @@ app.post("/auth/signup", (req, res) => {
 
       res.status(201).json({
         id: this.lastID,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
+        name: trimmedName,
+        email: trimmedEmail,
         wallet_balance: 1000,
       });
     }
