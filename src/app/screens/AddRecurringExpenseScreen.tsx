@@ -97,7 +97,7 @@ export function AddRecurringExpenseScreen() {
 
       updateStoredWalletBalance(response.data.wallet_balance);
       toast.success(language === "es" ? "Split recurrente creado" : "Recurring split created");
-      navigate(`/household/${response.data.id}`);
+      navigate("/home", { replace: true });
     } catch (error: any) {
       console.error("Error creating recurring split:", error);
       toast.error(error.response?.data?.message || (language === "es" ? "No se pudo crear" : "Could not create recurring split"));

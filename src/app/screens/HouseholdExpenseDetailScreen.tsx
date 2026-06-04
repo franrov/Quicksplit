@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Bell, CalendarDays, CheckCircle2, PauseCircle, Receipt, Repeat, Trash2 } from "lucide-react";
+import { Bell, CalendarDays, CheckCircle2, Home, PauseCircle, Receipt, Repeat, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
@@ -351,6 +351,13 @@ export function HouseholdExpenseDetailScreen() {
           )}
         </div>
       )}
+      <button
+        onClick={() => navigate("/home")}
+        className="w-full bg-gray-900 dark:bg-gray-50 text-white dark:text-gray-950 rounded-2xl p-4 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+      >
+        <Home size={20} />
+        {language === "es" ? "Volver al inicio" : "Back to Home"}
+      </button>
     </div>
   );
 }
