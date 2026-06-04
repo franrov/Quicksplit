@@ -8,7 +8,7 @@ export function AssignAmountsScreen() {
   const splitData = location.state || { title: 'Unknown', amount: '0', people: [], method: 'equal' };
   
   const totalAmount = parseFloat(splitData.amount) || 0;
-  const allParticipants = [{ id: 'me', name: 'You (Francisco)' }, ...splitData.people];
+  const allParticipants = [{ id: 'me', name: 'You' }, ...splitData.people];
   
   // State for values assigned
   const [values, setValues] = useState<Record<string, string>>({});
