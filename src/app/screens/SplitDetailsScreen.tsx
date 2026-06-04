@@ -4,6 +4,7 @@ import { Bell, CheckCircle2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
+import { updateStoredWalletBalance } from "../wallet";
 
 type Participant = {
   id: string;
@@ -93,10 +94,14 @@ export function SplitDetailsScreen() {
       });
 
       setSplit(response.data);
+      updateStoredWalletBalance(response.data.wallet_balance);
       toast.success("Payment marked as sent", { duration: 2000 });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error marking paid:", error);
-      toast.error("Could not mark payment");
+      toast.error(error.response?.data?.message || "Could not mark payment");
+      if (error.response?.status === 402) {
+        navigate("/wallet/deposit");
+      }
     }
   };
 

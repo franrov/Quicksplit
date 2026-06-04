@@ -8,11 +8,13 @@ import {
   Plus,
   Receipt,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useLanguage } from "../context/LanguageContext";
 import { apiUrl } from "../api";
+import { updateStoredWalletBalance } from "../wallet";
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -25,6 +27,7 @@ export function HomeScreen() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [splitInvite, setSplitInvite] = useState<any | null>(null);
   const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
+  const [walletBalance, setWalletBalance] = useState(Number(currentUser?.wallet_balance ?? 1000));
   const initials = currentUser?.name
     ? currentUser.name
         .split(" ")
@@ -60,10 +63,13 @@ export function HomeScreen() {
     Promise.all([
       axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=0`)),
       axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=1`)),
+      axios.get(apiUrl(`/wallet?userId=${currentUser.id}`)),
     ])
-      .then(([regularResponse, recurringResponse]) => {
+      .then(([regularResponse, recurringResponse, walletResponse]) => {
         setSplits(regularResponse.data);
         setBalanceSplits([...regularResponse.data, ...recurringResponse.data]);
+        setWalletBalance(Number(walletResponse.data.wallet_balance ?? 1000));
+        updateStoredWalletBalance(walletResponse.data.wallet_balance);
         setSplitsError("");
       })
       .catch((error) => {
@@ -97,16 +103,19 @@ export function HomeScreen() {
   const refreshHomeData = async () => {
     if (!currentUser?.id) return;
 
-    const [regularResponse, recurringResponse, countResponse, notificationsResponse] = await Promise.all([
+    const [regularResponse, recurringResponse, countResponse, notificationsResponse, walletResponse] = await Promise.all([
       axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=0`)),
       axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=1`)),
       axios.get(apiUrl(`/notifications/unread-count?userId=${currentUser.id}`)),
       axios.get(apiUrl(`/notifications?userId=${currentUser.id}`)),
+      axios.get(apiUrl(`/wallet?userId=${currentUser.id}`)),
     ]);
 
     setSplits(regularResponse.data);
     setBalanceSplits([...regularResponse.data, ...recurringResponse.data]);
     setUnreadNotificationCount(countResponse.data.count || 0);
+    setWalletBalance(Number(walletResponse.data.wallet_balance ?? 1000));
+    updateStoredWalletBalance(walletResponse.data.wallet_balance);
     setSplitInvite(
       notificationsResponse.data.find((notification: any) => notification.type === "invite" && !notification.is_read) || null
     );
@@ -234,6 +243,22 @@ export function HomeScreen() {
         ) : (
           <>
             {/* Balances */}
+            <button
+              type="button"
+              onClick={() => navigate("/wallet/deposit")}
+              className="w-full bg-white dark:bg-gray-900 rounded-2xl p-4 flex items-center gap-4 border border-gray-100 dark:border-gray-800 shadow-sm active:bg-gray-50 dark:active:bg-gray-800 transition-colors"
+            >
+              <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                <Wallet size={24} />
+              </div>
+              <div className="text-left flex-1">
+                <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  {t("walletBalance")}
+                </p>
+                <p className="text-2xl font-black text-gray-900 dark:text-gray-50">${walletBalance.toFixed(2)}</p>
+              </div>
+            </button>
+
             <div className="flex gap-4">
               <div className="flex-1 bg-red-50/80 rounded-2xl p-4 border border-red-100/50 shadow-sm">
                 <p className="text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">{t("youOwe")}</p>

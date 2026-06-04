@@ -232,6 +232,61 @@ const getDb = (sql, params = []) =>
     });
   });
 
+const toMoney = (value) => Number((Number(value) || 0).toFixed(2));
+
+const getWalletBalance = async (userId) => {
+  const user = await getDb("SELECT wallet_balance FROM users WHERE id = ?", [userId]);
+  if (!user) return null;
+  return toMoney(user.wallet_balance ?? 1000);
+};
+
+const depositWallet = async (userId, amount) => {
+  const depositAmount = toMoney(amount);
+
+  if (!depositAmount || depositAmount <= 0) {
+    const error = new Error("Deposit amount must be greater than zero");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const balance = await getWalletBalance(userId);
+  if (balance === null) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const nextBalance = toMoney(balance + depositAmount);
+  await runDb("UPDATE users SET wallet_balance = ? WHERE id = ?", [nextBalance, userId]);
+  return nextBalance;
+};
+
+const deductWallet = async (userId, amount) => {
+  const chargeAmount = toMoney(amount);
+
+  if (!chargeAmount || chargeAmount <= 0) {
+    return getWalletBalance(userId);
+  }
+
+  const balance = await getWalletBalance(userId);
+  if (balance === null) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (balance < chargeAmount) {
+    const error = new Error("Insufficient funds. Deposit money before paying this split.");
+    error.statusCode = 402;
+    error.walletBalance = balance;
+    throw error;
+  }
+
+  const nextBalance = toMoney(balance - chargeAmount);
+  await runDb("UPDATE users SET wallet_balance = ? WHERE id = ?", [nextBalance, userId]);
+  return nextBalance;
+};
+
 const upsertBalanceNotification = ({ userId, splitId, participant, splitTitle }) => {
   return getDb(
     "SELECT id FROM notifications WHERE user_id = ? AND split_id = ? AND type = ? AND participant_id = ?",
@@ -341,6 +396,7 @@ db.serialize(() => {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
+      wallet_balance REAL DEFAULT 1000,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -410,6 +466,29 @@ db.serialize(() => {
     addColumnIfMissing("splits", columns, "participants_json", "TEXT DEFAULT '[]'");
   });
 
+  db.all("PRAGMA table_info(users)", [], (err, columns) => {
+    if (err) {
+      console.error("Error checking users table:", err);
+      return;
+    }
+
+    const hasWalletBalance = columns.some((column) => column.name === "wallet_balance");
+
+    if (hasWalletBalance) {
+      db.run("UPDATE users SET wallet_balance = 1000 WHERE wallet_balance IS NULL");
+      return;
+    }
+
+    db.run("ALTER TABLE users ADD COLUMN wallet_balance REAL DEFAULT 1000", [], (walletErr) => {
+      if (walletErr) {
+        console.error("Error adding users.wallet_balance column:", walletErr);
+        return;
+      }
+
+      db.run("UPDATE users SET wallet_balance = 1000 WHERE wallet_balance IS NULL");
+    });
+  });
+
   db.all("PRAGMA table_info(notifications)", [], (err, columns) => {
     if (err) {
       console.error("Error checking notifications table:", err);
@@ -471,8 +550,8 @@ app.post("/auth/signup", (req, res) => {
   }
 
   db.run(
-    "INSERT INTO users(name, email, password) VALUES (?, ?, ?)",
-    [name.trim(), email.trim().toLowerCase(), hashPassword(password)],
+    "INSERT INTO users(name, email, password, wallet_balance) VALUES (?, ?, ?, ?)",
+    [name.trim(), email.trim().toLowerCase(), hashPassword(password), 1000],
     function (err) {
       if (err) {
         if (err.message.includes("UNIQUE")) {
@@ -486,6 +565,7 @@ app.post("/auth/signup", (req, res) => {
         id: this.lastID,
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        wallet_balance: 1000,
       });
     }
   );
@@ -499,7 +579,7 @@ app.post("/auth/login", (req, res) => {
   }
 
   db.get(
-    "SELECT id, name, email, password FROM users WHERE email = ?",
+    "SELECT id, name, email, password, wallet_balance FROM users WHERE email = ?",
     [email.trim().toLowerCase()],
     (err, user) => {
       if (err) {
@@ -526,6 +606,7 @@ app.post("/auth/login", (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        wallet_balance: toMoney(user.wallet_balance ?? 1000),
       });
     }
   );
@@ -587,6 +668,43 @@ app.get("/users", (req, res) => {
       res.json(rows);
     }
   );
+});
+
+app.get("/wallet", async (req, res) => {
+  const userId = Number(req.query.userId);
+
+  if (!userId) {
+    return res.status(400).json({ message: "userId is required" });
+  }
+
+  try {
+    const walletBalance = await getWalletBalance(userId);
+
+    if (walletBalance === null) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ wallet_balance: walletBalance });
+  } catch (err) {
+    console.error("Error loading wallet:", err);
+    res.status(500).json({ message: "Could not load wallet" });
+  }
+});
+
+app.post("/wallet/deposit", async (req, res) => {
+  const { userId, amount } = req.body;
+
+  if (!userId || !amount) {
+    return res.status(400).json({ message: "userId and amount are required" });
+  }
+
+  try {
+    const walletBalance = await depositWallet(userId, amount);
+    res.json({ wallet_balance: walletBalance });
+  } catch (err) {
+    console.error("Error depositing funds:", err);
+    res.status(err.statusCode || 500).json({ message: err.message || "Could not deposit funds" });
+  }
 });
 
 app.get("/notifications", (req, res) => {
@@ -737,17 +855,27 @@ app.get("/splits/:id", (req, res) => {
 app.post("/splits", (req, res) => {
   const { title, amount, status, userId, method, payer, participants, isRecurring, frequency, nextDueDate } = req.body;
   const splitStatus = status || "pending";
+  const totalAmount = toMoney(amount);
 
-  if (!userId || !title || !amount) {
+  if (!userId || !title || !totalAmount) {
     return res.status(400).json({ message: "userId, title, and amount are required" });
   }
 
+  Promise.resolve()
+    .then(async () => {
+      if ((payer || "me") === "me") {
+        return deductWallet(userId, totalAmount);
+      }
+
+      return getWalletBalance(userId);
+    })
+    .then((walletBalance) => {
   db.run(
     "INSERT INTO splits(user_id, title, amount, status, method, payer, is_recurring, frequency, next_due_date, participants_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       userId,
       title,
-      amount,
+      totalAmount,
       splitStatus,
       method || "equal",
       payer || "me",
@@ -799,7 +927,7 @@ app.post("/splits", (req, res) => {
         id: splitId,
         user_id: userId,
         title,
-        amount,
+        amount: totalAmount,
         status: splitStatus,
         method: method || "equal",
         payer: payer || "me",
@@ -807,9 +935,18 @@ app.post("/splits", (req, res) => {
         frequency: isRecurring ? frequency || "monthly" : null,
         next_due_date: isRecurring ? nextDueDate || formatDateOnly(new Date()) : null,
         participants: storedParticipants,
+        wallet_balance: walletBalance,
       });
     }
   );
+    })
+    .catch((err) => {
+      console.error("Error creating split:", err);
+      res.status(err.statusCode || 500).json({
+        message: err.message || "Could not create split",
+        wallet_balance: err.walletBalance,
+      });
+    });
 });
 
 app.post("/splits/:id/respond", (req, res) => {
@@ -1022,7 +1159,8 @@ app.patch("/splits/:id/pay", (req, res) => {
       SELECT
         splits.*,
         split_participants.name AS paid_participant_name,
-        split_participants.amount AS paid_participant_amount
+        split_participants.amount AS paid_participant_amount,
+        split_participants.status AS paid_participant_status
       FROM splits
       JOIN split_participants ON split_participants.split_id = splits.id
       WHERE splits.id = ? AND split_participants.user_id = ?
@@ -1037,6 +1175,13 @@ app.patch("/splits/:id/pay", (req, res) => {
         return res.status(404).json({ message: "Split not found" });
       }
 
+      if (split.paid_participant_status === "paid") {
+        return res.status(409).json({ message: "This payment is already marked paid" });
+      }
+
+      Promise.resolve()
+        .then(() => deductWallet(userId, split.paid_participant_amount || split.amount))
+        .then((walletBalance) => {
       db.run(
         "UPDATE split_participants SET status = 'paid' WHERE split_id = ? AND user_id = ?",
         [splitId, userId],
@@ -1083,7 +1228,10 @@ app.patch("/splits/:id/pay", (req, res) => {
                         return res.status(500).json({ message: "Could not load participants" });
                       }
 
-                      res.json(formatSplitWithParticipants(updatedSplit, participants));
+                      res.json({
+                        ...formatSplitWithParticipants(updatedSplit, participants),
+                        wallet_balance: walletBalance,
+                      });
                     });
                   });
                 }
@@ -1092,6 +1240,14 @@ app.patch("/splits/:id/pay", (req, res) => {
           );
         }
       );
+        })
+        .catch((walletErr) => {
+          console.error("Error deducting wallet for payment:", walletErr);
+          res.status(walletErr.statusCode || 500).json({
+            message: walletErr.message || "Could not mark paid",
+            wallet_balance: walletErr.walletBalance,
+          });
+        });
     }
   );
 });

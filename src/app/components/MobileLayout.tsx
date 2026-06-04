@@ -30,6 +30,7 @@ export function MobileLayout() {
       case "/household/new": return t("householdExpenses");
       case "/notifications": return t("notifications");
       case "/profile/change-password": return t("changePasswordTitle");
+      case "/wallet/deposit": return t("depositFunds");
       default:
         if (location.pathname.endsWith("/remind")) return t("reminders");
         if (location.pathname.startsWith("/split/")) return t("splitDetails");

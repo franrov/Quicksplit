@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
 import { useLanguage } from "../context/LanguageContext";
+import { updateStoredWalletBalance } from "../wallet";
 
 type Participant = {
   id: string;
@@ -67,10 +68,14 @@ export function HouseholdExpenseDetailScreen() {
         userId: currentUser.id,
       });
       setSplit(response.data);
+      updateStoredWalletBalance(response.data.wallet_balance);
       toast.success(language === "es" ? "Pago marcado como enviado" : "Payment marked as sent", { duration: 2000 });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error marking paid:", error);
-      toast.error(language === "es" ? "No se pudo marcar como pagado" : "Could not mark payment");
+      toast.error(error.response?.data?.message || (language === "es" ? "No se pudo marcar como pagado" : "Could not mark payment"));
+      if (error.response?.status === 402) {
+        navigate("/wallet/deposit");
+      }
     }
   };
 

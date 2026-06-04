@@ -8,14 +8,19 @@ import {
   ChevronRight,
   Plus,
   LogOut,
+  Wallet,
 } from "lucide-react";
+import axios from "axios";
 import { useLanguage } from "../context/LanguageContext";
+import { apiUrl } from "../api";
+import { updateStoredWalletBalance } from "../wallet";
 
 export function ProfileScreen() {
   const navigate = useNavigate();
   const { language, t, toggleLanguage } = useLanguage();
   const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
   const [theme, setTheme] = useState(localStorage.getItem("quicksplitTheme") || "light");
+  const [walletBalance, setWalletBalance] = useState(Number(currentUser?.wallet_balance ?? 1000));
   const initials = currentUser?.name
     ? currentUser.name
         .split(" ")
@@ -39,6 +44,20 @@ export function ProfileScreen() {
     localStorage.setItem("quicksplitTheme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    axios
+      .get(apiUrl(`/wallet?userId=${currentUser.id}`))
+      .then((response) => {
+        setWalletBalance(Number(response.data.wallet_balance ?? 1000));
+        updateStoredWalletBalance(response.data.wallet_balance);
+      })
+      .catch((error) => {
+        console.error("Error loading wallet:", error);
+      });
+  }, [currentUser?.id]);
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-80px)] sm:min-h-[calc(800px-80px)] pb-8">
 
@@ -52,6 +71,23 @@ export function ProfileScreen() {
       </div>
 
       <div className="flex-1 px-6 py-6 space-y-6">
+
+        {/* Wallet */}
+        <Section title={t("wallet")}>
+          <SettingsRow
+            icon={<Wallet size={18} />}
+            iconBg="bg-emerald-100 text-emerald-600"
+            label={t("walletBalance")}
+            value={`$${walletBalance.toFixed(2)}`}
+          />
+          <SettingsRow
+            icon={<Plus size={18} />}
+            iconBg="bg-gray-100 text-gray-500"
+            label={t("depositFunds")}
+            onPress={() => navigate("/wallet/deposit")}
+            chevron
+          />
+        </Section>
 
         {/* Payment Methods */}
         <Section title={t("paymentMethod")}>

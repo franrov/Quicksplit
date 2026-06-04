@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
 import { useLanguage } from "../context/LanguageContext";
+import { updateStoredWalletBalance } from "../wallet";
 
 type AppUser = {
   id: number;
@@ -94,11 +95,15 @@ export function AddRecurringExpenseScreen() {
         participants,
       });
 
+      updateStoredWalletBalance(response.data.wallet_balance);
       toast.success(language === "es" ? "Split recurrente creado" : "Recurring split created");
       navigate(`/household/${response.data.id}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating recurring split:", error);
-      toast.error(language === "es" ? "No se pudo crear" : "Could not create recurring split");
+      toast.error(error.response?.data?.message || (language === "es" ? "No se pudo crear" : "Could not create recurring split"));
+      if (error.response?.status === 402) {
+        navigate("/wallet/deposit");
+      }
     } finally {
       setIsCreating(false);
     }

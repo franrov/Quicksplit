@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
 import { useLanguage } from "../context/LanguageContext";
+import { updateStoredWalletBalance } from "../wallet";
 
 export function ReviewSplitScreen() {
   const navigate = useNavigate();
@@ -163,6 +164,7 @@ export function ReviewSplitScreen() {
         payer: splitData.payer,
         participants,
       });
+      updateStoredWalletBalance(response.data.wallet_balance);
       const pendingParticipants = participants.filter((participant) => participant.status !== "paid");
       const peopleWhoOweYou = pendingParticipants.filter((participant) => participant.id !== "me");
       const youOwe = pendingParticipants.find((participant) => participant.id === "me");
@@ -215,12 +217,16 @@ export function ReviewSplitScreen() {
           isRecurring: false,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating split:", error);
 
-      toast.error("Failed to create split", {
+      const message = error.response?.data?.message || "Failed to create split";
+      toast.error(message, {
         duration: 3000,
       });
+      if (error.response?.status === 402) {
+        navigate("/wallet/deposit");
+      }
     }
   };
 

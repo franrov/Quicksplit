@@ -20,6 +20,7 @@ import { LoginScreen } from "./screens/LoginScreen";
 import { SignupScreen } from "./screens/SignupScreen";
 import { ChangePasswordScreen } from "./screens/ChangePasswordScreen";
 import { ReminderMessageScreen } from "./screens/ReminderMessageScreen";
+import { DepositFundsScreen } from "./screens/DepositFundsScreen";
 
 export const router = createBrowserRouter([
   {
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "profile", Component: ProfileScreen },
       { path: "profile/change-password", Component: ChangePasswordScreen },
       { path: "payment-method/new", Component: AddPaymentMethodScreen },
+      { path: "wallet/deposit", Component: DepositFundsScreen },
     ],
   },
 ]);
