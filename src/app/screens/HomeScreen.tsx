@@ -1,6 +1,13 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Receipt, Home as HomeIcon, CheckCircle2, CircleDashed } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  CircleDashed,
+  Home as HomeIcon,
+  Plus,
+  Receipt,
+} from "lucide-react";
 import axios from "axios";
 
 export function HomeScreen() {
@@ -27,117 +34,136 @@ export function HomeScreen() {
   }, []);
 
   return (
-    <div className="p-6 space-y-8 flex flex-col min-h-full">
-      {isEmptyState ? (
-        <>
-          <div className="flex gap-4">
-            <div className="flex-1 bg-gray-100 rounded-2xl p-4 border border-gray-200 shadow-sm">
-              <p className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">You owe</p>
-              <p className="text-2xl font-black text-gray-400">$0.00</p>
-            </div>
-            <div className="flex-1 bg-gray-100 rounded-2xl p-4 border border-gray-200 shadow-sm">
-              <p className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">You are owed</p>
-              <p className="text-2xl font-black text-gray-400">$0.00</p>
-            </div>
-          </div>
+    <div className="flex flex-col min-h-full">
+      {/* Top action bar with notification + profile */}
+      <div className="flex items-center justify-end gap-2 px-6 pt-4 pb-2">
+        <button
+          onClick={() => navigate("/notifications")}
+          className="relative w-10 h-10 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 active:bg-gray-50 transition-colors"
+        >
+          <Bell size={18} />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
+        </button>
+        <button
+          onClick={() => navigate("/profile")}
+          className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white shadow-sm active:bg-gray-700 transition-colors"
+        >
+          <span className="text-xs font-black">FR</span>
+        </button>
+      </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
-            <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mb-6">
-              <Receipt size={48} strokeWidth={1.5} />
+      <div className="p-6 pt-2 space-y-6 flex flex-col flex-1">
+        {isEmptyState ? (
+          <>
+            <div className="flex gap-4">
+              <div className="flex-1 bg-gray-100 rounded-2xl p-4 border border-gray-200 shadow-sm">
+                <p className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">You owe</p>
+                <p className="text-2xl font-black text-gray-400">$0.00</p>
+              </div>
+              <div className="flex-1 bg-gray-100 rounded-2xl p-4 border border-gray-200 shadow-sm">
+                <p className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">You are owed</p>
+                <p className="text-2xl font-black text-gray-400">$0.00</p>
+              </div>
             </div>
-            <h2 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">No splits yet</h2>
-            <p className="text-gray-500 font-medium mb-8 max-w-[250px]">
-              Create your first split to start sharing expenses with friends.
-            </p>
+
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mb-6">
+                <Receipt size={48} strokeWidth={1.5} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">No splits yet</h2>
+              <p className="text-gray-500 font-medium mb-8 max-w-[250px]">
+                Create your first split to start sharing expenses with friends.
+              </p>
+              <button
+                onClick={() => navigate("/new")}
+                className="w-full bg-gray-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all"
+              >
+                <Plus size={24} />
+                Create your first split
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Balances */}
+            <div className="flex gap-4">
+              <div className="flex-1 bg-red-50/80 rounded-2xl p-4 border border-red-100/50 shadow-sm">
+                <p className="text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">You owe</p>
+                <p className="text-2xl font-black text-red-700">$24.50</p>
+              </div>
+              <div className="flex-1 bg-emerald-50/80 rounded-2xl p-4 border border-emerald-100/50 shadow-sm">
+                <p className="text-xs font-bold text-emerald-600 mb-1 uppercase tracking-wider">You are owed</p>
+                <p className="text-2xl font-black text-emerald-700">$68.25</p>
+              </div>
+            </div>
+
+            {/* Primary Action */}
             <button
               onClick={() => navigate("/new")}
               className="w-full bg-gray-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all"
             >
               <Plus size={24} />
-              Create your first split
+              New Split
             </button>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Balances */}
-          <div className="flex gap-4">
-            <div className="flex-1 bg-red-50/80 rounded-2xl p-4 border border-red-100/50 shadow-sm">
-              <p className="text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">You owe</p>
-              <p className="text-2xl font-black text-red-700">$24.50</p>
-            </div>
-            <div className="flex-1 bg-emerald-50/80 rounded-2xl p-4 border border-emerald-100/50 shadow-sm">
-              <p className="text-xs font-bold text-emerald-600 mb-1 uppercase tracking-wider">You are owed</p>
-              <p className="text-2xl font-black text-emerald-700">$68.25</p>
-            </div>
-          </div>
 
-          {/* Primary Action */}
-          <button
-            onClick={() => navigate("/new")}
-            className="w-full bg-gray-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all"
-          >
-            <Plus size={24} />
-            New Split
-          </button>
+            {/* Shortcut */}
+            <button
+              onClick={() => navigate("/household")}
+              className="w-full bg-white rounded-2xl p-4 flex items-center gap-4 border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
+            >
+              <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <HomeIcon size={24} />
+              </div>
+              <div className="text-left flex-1">
+                <h3 className="font-bold text-gray-900">Household Expenses</h3>
+                <p className="text-sm text-gray-500 font-medium">View recurring bills & balances</p>
+              </div>
+            </button>
 
-          {/* Shortcuts */}
-          <button
-            onClick={() => navigate("/household")}
-            className="w-full bg-white rounded-2xl p-4 flex items-center gap-4 border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
-          >
-            <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <HomeIcon size={24} />
+            {/* Recent Splits */}
+            <div>
+              <div className="flex items-center justify-between mb-4 px-1">
+                <h2 className="text-lg font-bold text-gray-900">Recent Splits</h2>
+                <button className="text-sm font-bold text-blue-600">See all</button>
+              </div>
+              <div className="space-y-3">
+                {isLoadingSplits ? (
+                  <div className="text-center text-gray-500 py-4">
+                    Loading splits...
+                  </div>
+                ) : splitsError ? (
+                  <div className="text-center text-orange-600 font-medium py-4">
+                    {splitsError}
+                  </div>
+                ) : splits.length === 0 ? (
+                  <div className="text-center text-gray-500 py-4">
+                    No splits found
+                  </div>
+                ) : (
+                  splits.map((split) => (
+                    <SplitCard
+                      key={split.id}
+                      title={split.title}
+                      amount={`$${Number(split.amount).toFixed(2)}`}
+                      status={split.status}
+                      settled={String(split.status).toLowerCase() === "settled"}
+                      onClick={() => navigate(`/split/${split.id}`)}
+                    />
+                  ))
+                )}
+              </div>
             </div>
-            <div className="text-left flex-1">
-              <h3 className="font-bold text-gray-900">Household Expenses</h3>
-              <p className="text-sm text-gray-500 font-medium">View recurring bills & balances</p>
-            </div>
-          </button>
+          </>
+        )}
 
-          {/* Recent Splits */}
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">
-              Recent Splits
-            </h2>
-
-            <div className="space-y-3">
-              {isLoadingSplits ? (
-                <div className="text-center text-gray-500 py-4">
-                  Loading splits...
-                </div>
-              ) : splitsError ? (
-                <div className="text-center text-orange-600 font-medium py-4">
-                  {splitsError}
-                </div>
-              ) : splits.length === 0 ? (
-                <div className="text-center text-gray-500 py-4">
-                  No splits found
-                </div>
-              ) : (
-                splits.map((split) => (
-                  <SplitCard
-                    key={split.id}
-                    title={split.title}
-                    amount={`$${Number(split.amount).toFixed(2)}`}
-                    status={split.status}
-                    settled={String(split.status).toLowerCase() === "settled"}
-                    onClick={() => navigate(`/split/${split.id}`)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Dev Toggle */}
-      <button
-        onClick={() => setIsEmptyState(!isEmptyState)}
-        className="mt-auto pt-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-center w-full"
-      >
-        Toggle {isEmptyState ? "Populated" : "Empty"} State
-      </button>
+        {/* Dev Toggle */}
+        <button
+          onClick={() => setIsEmptyState(!isEmptyState)}
+          className="mt-auto pt-2 text-xs font-bold text-gray-300 uppercase tracking-widest text-center w-full"
+        >
+          Toggle {isEmptyState ? "Populated" : "Empty"} State
+        </button>
+      </div>
     </div>
   );
 }

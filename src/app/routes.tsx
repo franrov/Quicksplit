@@ -8,10 +8,14 @@ import { SplitMethodScreen } from "./screens/SplitMethodScreen";
 import { AssignAmountsScreen } from "./screens/AssignAmountsScreen";
 import { WhoPaidScreen } from "./screens/WhoPaidScreen";
 import { ReviewSplitScreen } from "./screens/ReviewSplitScreen";
+import { ConfirmationScreen } from "./screens/ConfirmationScreen";
 import { SplitDetailsScreen } from "./screens/SplitDetailsScreen";
 import { HouseholdExpensesScreen } from "./screens/HouseholdExpensesScreen";
 import { HouseholdExpenseDetailScreen } from "./screens/HouseholdExpenseDetailScreen";
 import { AddRecurringExpenseScreen } from "./screens/AddRecurringExpenseScreen";
+import { NotificationsScreen } from "./screens/NotificationsScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
+import { AddPaymentMethodScreen } from "./screens/AddPaymentMethodScreen";
 
 export const router = createBrowserRouter([
   {
@@ -26,10 +30,14 @@ export const router = createBrowserRouter([
       { path: "new/assign", Component: AssignAmountsScreen },
       { path: "new/who-paid", Component: WhoPaidScreen },
       { path: "new/review", Component: ReviewSplitScreen },
+      { path: "confirmation", Component: ConfirmationScreen },
       { path: "split/:id", Component: SplitDetailsScreen },
       { path: "household", Component: HouseholdExpensesScreen },
       { path: "household/new", Component: AddRecurringExpenseScreen },
       { path: "household/:id", Component: HouseholdExpenseDetailScreen },
+      { path: "notifications", Component: NotificationsScreen },
+      { path: "profile", Component: ProfileScreen },
+      { path: "payment-method/new", Component: AddPaymentMethodScreen },
     ],
   },
 ]);

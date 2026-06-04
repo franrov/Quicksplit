@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { Divide, FileDigit, Percent, CheckCircle2 } from "lucide-react";
