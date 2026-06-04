@@ -56,7 +56,7 @@ export function HomeScreen() {
     }
 
     axios
-      .get(apiUrl(`/splits?userId=${currentUser.id}`))
+      .get(apiUrl(`/splits?userId=${currentUser.id}&recurring=0`))
       .then((response) => {
         setSplits(response.data);
         setSplitsError("");

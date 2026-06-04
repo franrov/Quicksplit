@@ -4,7 +4,6 @@ import { Bell, CheckCircle2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
-import { useLanguage } from "../context/LanguageContext";
 
 type Participant = {
   id: string;
@@ -26,7 +25,6 @@ type Split = {
 export function SplitDetailsScreen() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { t } = useLanguage();
   const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
   const [split, setSplit] = useState<Split | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,30 +67,6 @@ export function SplitDetailsScreen() {
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
   const canMarkPaid = !isCreator && myParticipant?.status !== "paid";
-
-  const handleRemind = async () => {
-    if (!split || !currentUser?.id) return;
-
-    try {
-      const response = await axios.post(apiUrl(`/splits/${split.id}/reminders`), {
-        userId: currentUser.id,
-      });
-
-      if (response.data.count === 0) {
-        toast(t("noPendingRemindersToSend"), {
-          icon: <Bell className="w-5 h-5 text-blue-500" />,
-          duration: 2000,
-        });
-      } else {
-        toast.success(t("remindersSent"), {
-          duration: 2000,
-        });
-      }
-    } catch (error) {
-      console.error("Error sending reminders:", error);
-      toast.error("Could not send reminders");
-    }
-  };
 
   const handleSettle = async () => {
     if (!split || !currentUser?.id) return;
@@ -207,7 +181,7 @@ export function SplitDetailsScreen() {
         {isCreator ? (
           <>
             <button
-              onClick={handleRemind}
+              onClick={() => navigate(`/split/${split.id}/remind`)}
               disabled={pendingCount === 0}
               className="flex-1 bg-white border-2 border-gray-200 disabled:text-gray-300 text-gray-900 rounded-2xl p-4 font-bold text-lg shadow-sm active:bg-gray-50 active:scale-[0.98] transition-all flex justify-center items-center gap-2"
             >

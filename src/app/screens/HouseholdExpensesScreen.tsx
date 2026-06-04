@@ -19,6 +19,8 @@ type Split = {
   title: string;
   amount: number;
   status: string;
+  frequency?: string;
+  next_due_date?: string;
   participants: Participant[];
 };
 
@@ -37,13 +39,13 @@ export function HouseholdExpensesScreen() {
     }
 
     axios
-      .get(apiUrl(`/splits?userId=${currentUser.id}`))
+      .get(apiUrl(`/splits?userId=${currentUser.id}&recurring=1`))
       .then((response) => {
         setSplits(response.data);
         setErrorMessage("");
       })
       .catch((error) => {
-        console.error("Error loading household splits:", error);
+        console.error("Error loading recurring splits:", error);
         setErrorMessage(language === "es" ? "No se pudieron cargar los gastos." : "Could not load expenses.");
       })
       .finally(() => setIsLoading(false));
@@ -90,7 +92,7 @@ export function HouseholdExpensesScreen() {
       <section>
         <div className="flex items-center justify-between mb-4 px-1">
           <h2 className="text-xl font-black text-gray-900 dark:text-gray-50 tracking-tight">
-            {language === "es" ? "Balance Actual" : "Current Balance"}
+            {language === "es" ? "Balance Recurrente" : "Recurring Balance"}
           </h2>
         </div>
         <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
@@ -137,10 +139,10 @@ export function HouseholdExpensesScreen() {
       <section className="flex-1">
         <div className="flex items-center justify-between mb-4 px-1">
           <h2 className="text-xl font-black text-gray-900 dark:text-gray-50 tracking-tight">
-            {language === "es" ? "Splits Compartidos" : "Shared Splits"}
+            {t("householdExpenses")}
           </h2>
           <button
-            onClick={() => navigate("/new")}
+            onClick={() => navigate("/household/new")}
             className="flex items-center gap-1 text-sm font-bold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-3 py-1.5 rounded-full"
           >
             <Plus size={16} strokeWidth={3} />
@@ -187,7 +189,7 @@ export function HouseholdExpensesScreen() {
                           settled ? "text-gray-500 font-bold" : "text-orange-600 font-bold"
                         }`}
                       >
-                        {split.status}
+                        {split.frequency ? split.frequency.replace("-", " ") : split.status}
                       </p>
                     </div>
                   </div>

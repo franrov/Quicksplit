@@ -9,11 +9,13 @@ import { apiUrl } from "../api";
 type Notification = {
   id: number;
   split_id: number;
-  type: "reminder" | "paid";
+  type: "balance" | "reminder" | "paid";
   participant_id: string;
   participant_name: string;
   amount: number;
   split_title: string;
+  message?: string;
+  tone?: string;
   is_read: boolean;
   created_at: string;
 };
@@ -185,28 +187,35 @@ function NotifCard({
   onPress: () => void;
 }) {
   const isPaid = notif.type === "paid";
+  const isReminderMessage = notif.type === "reminder";
   const amount = Number(notif.amount || 0).toFixed(2);
   const isCurrentUser = notif.participant_id === "me";
   const title =
-    language === "es"
-      ? isPaid
-        ? `"${notif.split_title}" fue saldado`
-        : isCurrentUser
-          ? `Debes $${amount}`
-          : `${notif.participant_name} te debe $${amount}`
-      : isPaid
-        ? `"${notif.split_title}" was settled`
-        : isCurrentUser
-          ? `You owe $${amount}`
-          : `${notif.participant_name} owes you $${amount}`;
+    isReminderMessage
+      ? language === "es"
+        ? `Recordatorio: ${notif.split_title}`
+        : `Reminder: ${notif.split_title}`
+      : language === "es"
+        ? isPaid
+          ? `${notif.participant_name} pagó $${amount}`
+          : isCurrentUser
+            ? `Debes $${amount}`
+            : `${notif.participant_name} te debe $${amount}`
+        : isPaid
+          ? `${notif.participant_name} paid $${amount}`
+          : isCurrentUser
+            ? `You owe $${amount}`
+            : `${notif.participant_name} owes you $${amount}`;
   const subtitle =
-    language === "es"
-      ? isPaid
-        ? `Total: $${Number(notif.amount || 0).toFixed(2)}`
-        : `"${notif.split_title}" · Pendiente`
-      : isPaid
-        ? `Total: $${Number(notif.amount || 0).toFixed(2)}`
-        : `"${notif.split_title}" · Pending`;
+    isReminderMessage
+      ? notif.message || (language === "es" ? "Mensaje de recordatorio" : "Reminder message")
+      : language === "es"
+        ? isPaid
+          ? `"${notif.split_title}" · Pago recibido`
+          : `"${notif.split_title}" · Pendiente`
+        : isPaid
+          ? `"${notif.split_title}" · Payment received`
+          : `"${notif.split_title}" · Pending`;
 
   return (
     <div

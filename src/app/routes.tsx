@@ -19,6 +19,7 @@ import { AddPaymentMethodScreen } from "./screens/AddPaymentMethodScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { SignupScreen } from "./screens/SignupScreen";
 import { ChangePasswordScreen } from "./screens/ChangePasswordScreen";
+import { ReminderMessageScreen } from "./screens/ReminderMessageScreen";
 
 export const router = createBrowserRouter([
   {
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { path: "new/review", Component: ReviewSplitScreen },
       { path: "confirmation", Component: ConfirmationScreen },
       { path: "split/:id", Component: SplitDetailsScreen },
+      { path: "split/:id/remind", Component: ReminderMessageScreen },
       { path: "household", Component: HouseholdExpensesScreen },
       { path: "household/new", Component: AddRecurringExpenseScreen },
       { path: "household/:id", Component: HouseholdExpenseDetailScreen },

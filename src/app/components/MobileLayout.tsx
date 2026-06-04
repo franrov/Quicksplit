@@ -27,12 +27,13 @@ export function MobileLayout() {
       case "/new/who-paid": return "Who Paid?";
       case "/new/review": return "Review Split";
       case "/household": return t("householdExpenses");
-      case "/household/new": return "New Expense";
+      case "/household/new": return t("householdExpenses");
       case "/notifications": return t("notifications");
       case "/profile/change-password": return t("changePasswordTitle");
       default:
+        if (location.pathname.endsWith("/remind")) return t("reminders");
         if (location.pathname.startsWith("/split/")) return t("splitDetails");
-        if (location.pathname.startsWith("/household/")) return "Expense Details";
+        if (location.pathname.startsWith("/household/")) return t("householdExpenses");
         return "Quicksplit";
     }
   };

@@ -78,6 +78,9 @@ const formatSplit = (split) => ({
   status: split.status,
   method: split.method || "equal",
   payer: split.payer || "me",
+  is_recurring: Boolean(split.is_recurring),
+  frequency: split.frequency || null,
+  next_due_date: split.next_due_date || null,
   participants: parseParticipants(split),
 });
 
@@ -110,6 +113,56 @@ const getSplitParticipants = (split, callback) => {
   );
 };
 
+const addDays = (date, days) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+};
+
+const addMonths = (date, months) => {
+  const nextDate = new Date(date);
+  nextDate.setMonth(nextDate.getMonth() + months);
+  return nextDate;
+};
+
+const formatDateOnly = (date) => date.toISOString().slice(0, 10);
+
+const getNextDueDate = (dateText, frequency) => {
+  const date = dateText ? new Date(`${dateText}T00:00:00`) : new Date();
+
+  if (Number.isNaN(date.getTime())) {
+    return formatDateOnly(new Date());
+  }
+
+  if (frequency === "weekly") return formatDateOnly(addDays(date, 7));
+  if (frequency === "bi-weekly") return formatDateOnly(addDays(date, 14));
+  return formatDateOnly(addMonths(date, 1));
+};
+
+const maybeAdvanceRecurringSplit = async (split) => {
+  if (!split.is_recurring || split.status !== "settled" || !split.next_due_date) {
+    return split;
+  }
+
+  const today = formatDateOnly(new Date());
+  if (split.next_due_date >= today) {
+    return split;
+  }
+
+  const nextDueDate = getNextDueDate(split.next_due_date, split.frequency);
+  await runDb("UPDATE splits SET status = 'pending', next_due_date = ? WHERE id = ?", [nextDueDate, split.id]);
+  await runDb("UPDATE split_participants SET status = CASE WHEN user_id = ? THEN 'paid' ELSE 'pending' END WHERE split_id = ?", [
+    split.user_id,
+    split.id,
+  ]);
+
+  return {
+    ...split,
+    status: "pending",
+    next_due_date: nextDueDate,
+  };
+};
+
 const sendJsonSplits = (res, rows) => {
   const splits = [];
   let pending = rows.length;
@@ -119,8 +172,10 @@ const sendJsonSplits = (res, rows) => {
     return;
   }
 
-  rows.forEach((split) => {
-    getSplitParticipants(split, (err, participants) => {
+  rows.forEach(async (split) => {
+    const currentSplit = await maybeAdvanceRecurringSplit(split);
+
+    getSplitParticipants(currentSplit, (err, participants) => {
       if (err) {
         if (!res.headersSent) {
           res.status(500).json({ message: "Could not load split participants" });
@@ -128,7 +183,7 @@ const sendJsonSplits = (res, rows) => {
         return;
       }
 
-      splits.push(formatSplitWithParticipants(split, participants));
+      splits.push(formatSplitWithParticipants(currentSplit, participants));
       pending -= 1;
 
       if (pending === 0 && !res.headersSent) {
@@ -147,6 +202,8 @@ const formatNotification = (notification) => ({
   participant_name: notification.participant_name,
   amount: notification.amount,
   split_title: notification.split_title,
+  message: notification.message,
+  tone: notification.tone,
   is_read: Boolean(notification.is_read),
   created_at: notification.created_at,
 });
@@ -175,10 +232,10 @@ const getDb = (sql, params = []) =>
     });
   });
 
-const upsertReminderNotification = ({ userId, splitId, participant, splitTitle }) => {
+const upsertBalanceNotification = ({ userId, splitId, participant, splitTitle }) => {
   return getDb(
     "SELECT id FROM notifications WHERE user_id = ? AND split_id = ? AND type = ? AND participant_id = ?",
-    [userId, splitId, "reminder", participant.id]
+    [userId, splitId, "balance", participant.id]
   ).then((existing) => {
     if (existing) {
       return runDb(
@@ -189,18 +246,18 @@ const upsertReminderNotification = ({ userId, splitId, participant, splitTitle }
 
     return runDb(
       "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [userId, splitId, "reminder", participant.id, participant.name, participant.amount, splitTitle]
+      [userId, splitId, "balance", participant.id, participant.name, participant.amount, splitTitle]
     ).then(() => true);
   });
 };
 
-const createReminderNotifications = async ({ userId, splitId, splitTitle, participants, ownerId = userId }) => {
+const createBalanceNotifications = async ({ userId, splitId, splitTitle, participants, ownerId = userId }) => {
   const pendingParticipants = participants.filter((participant) => participant.status !== "paid");
   const writes = [];
 
   pendingParticipants.forEach((participant) => {
     if (participant.userId && Number(participant.userId) !== Number(ownerId)) {
-      writes.push(upsertReminderNotification({
+      writes.push(upsertBalanceNotification({
         userId: participant.userId,
         splitId,
         participant: { ...participant, id: "me", name: "You" },
@@ -209,12 +266,39 @@ const createReminderNotifications = async ({ userId, splitId, splitTitle, partic
     }
 
     if (Number(userId) === Number(ownerId) && participant.id !== "me") {
-      writes.push(upsertReminderNotification({ userId, splitId, participant, splitTitle }));
+      writes.push(upsertBalanceNotification({ userId, splitId, participant, splitTitle }));
     }
   });
 
   const results = await Promise.all(writes);
   return results.filter(Boolean).length;
+};
+
+const createReminderMessageNotifications = async ({ splitId, splitTitle, participants, ownerId, message, tone }) => {
+  const pendingParticipants = participants.filter(
+    (participant) => participant.status !== "paid" && participant.userId && Number(participant.userId) !== Number(ownerId)
+  );
+
+  await Promise.all(
+    pendingParticipants.map((participant) =>
+      runDb(
+        "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, message, tone, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        [
+          participant.userId,
+          splitId,
+          "reminder",
+          "me",
+          participant.name,
+          participant.amount,
+          splitTitle,
+          message,
+          tone,
+        ]
+      )
+    )
+  );
+
+  return pendingParticipants.length;
 };
 
 const createPaidNotification = ({ userId, splitId, splitTitle, amount, participantName = "Split" }) => {
@@ -244,6 +328,9 @@ db.serialize(() => {
       status TEXT DEFAULT 'pending',
       method TEXT DEFAULT 'equal',
       payer TEXT DEFAULT 'me',
+      is_recurring INTEGER DEFAULT 0,
+      frequency TEXT,
+      next_due_date TEXT,
       participants_json TEXT DEFAULT '[]',
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
@@ -259,6 +346,8 @@ db.serialize(() => {
       participant_name TEXT,
       amount REAL,
       split_title TEXT,
+      message TEXT,
+      tone TEXT,
       is_read INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
@@ -289,7 +378,21 @@ db.serialize(() => {
     addColumnIfMissing("splits", columns, "user_id", "INTEGER");
     addColumnIfMissing("splits", columns, "method", "TEXT DEFAULT 'equal'");
     addColumnIfMissing("splits", columns, "payer", "TEXT DEFAULT 'me'");
+    addColumnIfMissing("splits", columns, "is_recurring", "INTEGER DEFAULT 0");
+    addColumnIfMissing("splits", columns, "frequency", "TEXT");
+    addColumnIfMissing("splits", columns, "next_due_date", "TEXT");
     addColumnIfMissing("splits", columns, "participants_json", "TEXT DEFAULT '[]'");
+  });
+
+  db.all("PRAGMA table_info(notifications)", [], (err, columns) => {
+    if (err) {
+      console.error("Error checking notifications table:", err);
+      return;
+    }
+
+    addColumnIfMissing("notifications", columns, "message", "TEXT");
+    addColumnIfMissing("notifications", columns, "tone", "TEXT");
+    db.run("UPDATE notifications SET type = 'balance' WHERE type = 'reminder' AND (message IS NULL OR message = '')");
   });
 });
 
@@ -502,6 +605,7 @@ app.patch("/notifications/read-all", (req, res) => {
 
 app.get("/splits", (req, res) => {
   const userId = Number(req.query.userId);
+  const recurring = req.query.recurring === "1" ? 1 : 0;
 
   if (!userId) {
     return res.status(400).json({ message: "userId is required" });
@@ -512,10 +616,11 @@ app.get("/splits", (req, res) => {
       SELECT DISTINCT splits.*
       FROM splits
       LEFT JOIN split_participants ON split_participants.split_id = splits.id
-      WHERE splits.user_id = ? OR split_participants.user_id = ?
+      WHERE (splits.user_id = ? OR split_participants.user_id = ?)
+      AND COALESCE(splits.is_recurring, 0) = ?
       ORDER BY splits.id DESC
     `,
-    [userId, userId],
+    [userId, userId, recurring],
     (err, rows) => {
     if (err) {
       return res.status(500).json(err);
@@ -563,7 +668,7 @@ app.get("/splits/:id", (req, res) => {
 });
 
 app.post("/splits", (req, res) => {
-  const { title, amount, status, userId, method, payer, participants } = req.body;
+  const { title, amount, status, userId, method, payer, participants, isRecurring, frequency, nextDueDate } = req.body;
   const splitStatus = status || "pending";
 
   if (!userId || !title || !amount) {
@@ -571,7 +676,7 @@ app.post("/splits", (req, res) => {
   }
 
   db.run(
-    "INSERT INTO splits(user_id, title, amount, status, method, payer, participants_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO splits(user_id, title, amount, status, method, payer, is_recurring, frequency, next_due_date, participants_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       userId,
       title,
@@ -579,6 +684,9 @@ app.post("/splits", (req, res) => {
       splitStatus,
       method || "equal",
       payer || "me",
+      isRecurring ? 1 : 0,
+      isRecurring ? frequency || "monthly" : null,
+      isRecurring ? nextDueDate || formatDateOnly(new Date()) : null,
       JSON.stringify(Array.isArray(participants) ? participants : []),
     ],
     async function (err) {
@@ -604,7 +712,7 @@ app.post("/splits", (req, res) => {
           )
         ));
 
-        await createReminderNotifications({
+        await createBalanceNotifications({
           userId,
           splitId,
           splitTitle: title,
@@ -623,6 +731,9 @@ app.post("/splits", (req, res) => {
         status: splitStatus,
         method: method || "equal",
         payer: payer || "me",
+        is_recurring: Boolean(isRecurring),
+        frequency: isRecurring ? frequency || "monthly" : null,
+        next_due_date: isRecurring ? nextDueDate || formatDateOnly(new Date()) : null,
         participants: storedParticipants,
       });
     }
@@ -631,7 +742,7 @@ app.post("/splits", (req, res) => {
 
 app.post("/splits/:id/reminders", (req, res) => {
   const splitId = Number(req.params.id);
-  const { userId } = req.body;
+  const { userId, message, tone } = req.body;
 
   if (!splitId || !userId) {
     return res.status(400).json({ message: "split id and userId are required" });
@@ -652,12 +763,13 @@ app.post("/splits/:id/reminders", (req, res) => {
       }
 
       try {
-        const count = await createReminderNotifications({
-          userId,
+        const count = await createReminderMessageNotifications({
           splitId,
           splitTitle: split.title,
           participants,
           ownerId: split.user_id,
+          message: String(message || "").trim() || "Friendly reminder to settle this split when you can.",
+          tone: tone || "custom",
         });
 
         res.json({ count });
@@ -705,9 +817,10 @@ app.patch("/splits/:id/settle", (req, res) => {
           return res.status(500).json({ message: "Could not settle split" });
         }
 
-        db.run("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = ?", [
+        db.run("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type IN (?, ?)", [
           userId,
           splitId,
+          "balance",
           "reminder",
         ]);
         db.run("UPDATE split_participants SET status = 'paid' WHERE split_id = ?", [splitId]);
@@ -765,9 +878,10 @@ app.patch("/splits/:id/pay", (req, res) => {
             return res.status(500).json({ message: "Could not mark paid" });
           }
 
-          db.run("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = ?", [
+          db.run("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type IN (?, ?)", [
             userId,
             splitId,
+            "balance",
             "reminder",
           ]);
 
