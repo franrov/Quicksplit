@@ -1209,7 +1209,7 @@ app.patch("/splits/:id/pay", (req, res) => {
             return res.status(500).json({ message: "Could not mark paid" });
           }
 
-          db.run("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type IN (?, ?)", [
+          db.run("DELETE FROM notifications WHERE user_id = ? AND split_id = ? AND type IN (?, ?)", [
             userId,
             splitId,
             "balance",
