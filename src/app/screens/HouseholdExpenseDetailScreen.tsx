@@ -364,7 +364,9 @@ export function HouseholdExpenseDetailScreen() {
       )}
       <button
         onClick={() => navigate("/home")}
-        className="w-full bg-gray-900 dark:bg-gray-50 text-white dark:text-gray-950 rounded-2xl p-4 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+        className={`w-full bg-gray-900 dark:bg-gray-50 text-white dark:text-gray-950 rounded-2xl p-4 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all flex justify-center items-center gap-2 ${
+          canSuspend || canDelete ? "" : "mt-5"
+        }`}
       >
         <Home size={20} />
         {language === "es" ? "Volver al inicio" : "Back to Home"}
