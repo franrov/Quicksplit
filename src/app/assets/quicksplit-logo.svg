@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">QuickSplit logo</title>
+  <desc id="desc">Blue rounded square QuickSplit app logo.</desc>
+  <defs>
+    <linearGradient id="blue" x1="68" x2="444" y1="40" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2873db"/>
+      <stop offset="1" stop-color="#1f63c7"/>
+    </linearGradient>
+  </defs>
+  <rect x="5" y="5" width="502" height="502" rx="94" fill="url(#blue)"/>
+  <rect x="11" y="11" width="490" height="490" rx="88" fill="none" stroke="#ffffff" stroke-opacity=".16" stroke-width="8"/>
+  <g fill="#fff" transform="translate(68 224)">
+    <text x="0" y="55" font-family="Inter, Arial, Helvetica, sans-serif" font-size="70" font-weight="500" letter-spacing="-5">QUICK</text>
+    <text x="216" y="55" font-family="Inter, Arial, Helvetica, sans-serif" font-size="70" font-style="italic" font-weight="500" letter-spacing="-5">SPLIT</text>
+    <circle cx="28" cy="25" r="27" fill="none" stroke="#fff" stroke-width="8"/>
+    <path d="M16 45 42 5" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="7"/>
+    <path d="M24 23 35 39" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="6"/>
+  </g>
+</svg>

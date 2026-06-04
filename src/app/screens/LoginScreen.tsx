@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { LogIn, Receipt } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { useLanguage } from "../context/LanguageContext";
 import { apiUrl } from "../api";
+import quicksplitLogo from "../assets/quicksplit-logo.svg";
 
 export function LoginScreen() {
   const navigate = useNavigate();
@@ -36,9 +37,11 @@ export function LoginScreen() {
   return (
     <div className="p-6 flex flex-col min-h-[calc(100vh-80px)] sm:min-h-[calc(800px-80px)]">
       <div className="flex-1 flex flex-col justify-center">
-        <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6">
-          <Receipt size={36} strokeWidth={1.8} />
-        </div>
+        <img
+          src={quicksplitLogo}
+          alt="QuickSplit"
+          className="w-24 h-24 rounded-[1.75rem] shadow-lg mb-6 object-cover"
+        />
         <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-2">{t("welcomeBack")}</h2>
         <p className="text-gray-500 font-medium mb-8">{t("loginSubtitle")}</p>
 
