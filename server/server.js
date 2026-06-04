@@ -1281,8 +1281,10 @@ app.patch("/splits/:id/pay", (req, res) => {
         return res.status(409).json({ message: "This payment is already marked paid" });
       }
 
+      const paidAmount = split.paid_participant_amount || split.amount;
+
       Promise.resolve()
-        .then(() => deductWallet(userId, split.paid_participant_amount || split.amount))
+        .then(() => deductWallet(userId, paidAmount))
         .then((walletBalance) => {
       db.run(
         "UPDATE split_participants SET status = 'paid' WHERE split_id = ? AND user_id = ?",
@@ -1292,6 +1294,9 @@ app.patch("/splits/:id/pay", (req, res) => {
             return res.status(500).json({ message: "Could not mark paid" });
           }
 
+          Promise.resolve()
+            .then(() => (Number(split.user_id) === Number(userId) ? walletBalance : depositWallet(split.user_id, paidAmount)))
+            .then((ownerWalletBalance) => {
           db.run("DELETE FROM notifications WHERE user_id = ? AND split_id = ? AND type IN (?, ?)", [
             userId,
             splitId,
@@ -1316,7 +1321,7 @@ app.patch("/splits/:id/pay", (req, res) => {
                     userId: split.user_id,
                     splitId,
                     splitTitle: split.title,
-                    amount: split.paid_participant_amount || split.amount,
+                    amount: paidAmount,
                     participantName: split.paid_participant_name || "Someone",
                   });
 
@@ -1333,6 +1338,7 @@ app.patch("/splits/:id/pay", (req, res) => {
                       res.json({
                         ...formatSplitWithParticipants(updatedSplit, participants),
                         wallet_balance: walletBalance,
+                        owner_wallet_balance: ownerWalletBalance,
                       });
                     });
                   });
@@ -1340,6 +1346,11 @@ app.patch("/splits/:id/pay", (req, res) => {
               );
             }
           );
+            })
+            .catch((transferErr) => {
+              console.error("Error crediting split owner:", transferErr);
+              res.status(transferErr.statusCode || 500).json({ message: transferErr.message || "Could not transfer payment" });
+            });
         }
       );
         })
