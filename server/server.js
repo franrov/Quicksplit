@@ -115,6 +115,18 @@ const getSplitParticipants = (split, callback) => {
   );
 };
 
+const getSplitParticipantsAsync = (split) =>
+  new Promise((resolve, reject) => {
+    getSplitParticipants(split, (err, participants) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      resolve(participants);
+    });
+  });
+
 const addDays = (date, days) => {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
@@ -147,7 +159,7 @@ const maybeAdvanceRecurringSplit = async (split) => {
   }
 
   const today = formatDateOnly(new Date());
-  if (split.next_due_date >= today) {
+  if (split.next_due_date > today) {
     return split;
   }
 
@@ -157,6 +169,21 @@ const maybeAdvanceRecurringSplit = async (split) => {
     split.user_id,
     split.id,
   ]);
+  await runDb("DELETE FROM notifications WHERE split_id = ? AND type IN (?, ?)", [split.id, "balance", "reminder"]);
+
+  const participants = await getSplitParticipantsAsync(split);
+  const nextParticipants = participants.map((participant) => ({
+    ...participant,
+    status: Number(participant.userId) === Number(split.user_id) ? "paid" : "pending",
+  }));
+
+  await createBalanceNotifications({
+    userId: split.user_id,
+    splitId: split.id,
+    splitTitle: split.title,
+    participants: nextParticipants,
+    ownerId: split.user_id,
+  });
 
   return {
     ...split,
@@ -734,7 +761,23 @@ app.get("/notifications", (req, res) => {
   }
 
   db.all(
-    "SELECT * FROM notifications WHERE user_id = ? ORDER BY is_read ASC, datetime(created_at) DESC, id DESC",
+    `
+      SELECT notifications.*
+      FROM notifications
+      LEFT JOIN splits ON splits.id = notifications.split_id
+      LEFT JOIN split_participants
+        ON split_participants.split_id = notifications.split_id
+        AND split_participants.user_id = notifications.user_id
+      WHERE notifications.user_id = ?
+      AND NOT (
+        notifications.type IN ('balance', 'reminder')
+        AND (
+          COALESCE(splits.status, '') IN ('settled', 'suspended')
+          OR COALESCE(split_participants.status, '') IN ('paid', 'suspended')
+        )
+      )
+      ORDER BY notifications.is_read ASC, datetime(notifications.created_at) DESC, notifications.id DESC
+    `,
     [userId],
     (err, rows) => {
       if (err) {
@@ -754,7 +797,23 @@ app.get("/notifications/unread-count", (req, res) => {
   }
 
   db.get(
-    "SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0",
+    `
+      SELECT COUNT(*) AS count
+      FROM notifications
+      LEFT JOIN splits ON splits.id = notifications.split_id
+      LEFT JOIN split_participants
+        ON split_participants.split_id = notifications.split_id
+        AND split_participants.user_id = notifications.user_id
+      WHERE notifications.user_id = ?
+      AND notifications.is_read = 0
+      AND NOT (
+        notifications.type IN ('balance', 'reminder')
+        AND (
+          COALESCE(splits.status, '') IN ('settled', 'suspended')
+          OR COALESCE(split_participants.status, '') IN ('paid', 'suspended')
+        )
+      )
+    `,
     [userId],
     (err, row) => {
       if (err) {
