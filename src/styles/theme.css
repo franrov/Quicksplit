@@ -179,3 +179,147 @@
     line-height: 1.5;
   }
 }
+
+@layer utilities {
+  .text-gray-300 {
+    color: #94a3b8;
+  }
+
+  .text-gray-400 {
+    color: #64748b;
+  }
+
+  .text-gray-500 {
+    color: #475569;
+  }
+
+  .dark .text-gray-950,
+  .dark .text-gray-900,
+  .dark .text-gray-800,
+  .dark .text-gray-700 {
+    color: #f8fafc;
+  }
+
+  .dark .text-gray-600,
+  .dark .text-gray-500,
+  .dark .text-gray-400 {
+    color: #cbd5e1;
+  }
+
+  .dark .text-gray-300 {
+    color: #94a3b8;
+  }
+
+  .dark .bg-white,
+  .dark .bg-gray-50 {
+    background-color: #111827;
+  }
+
+  .dark .bg-gray-50\/50,
+  .dark .bg-gray-50\/80 {
+    background-color: rgb(17 24 39 / 0.82);
+  }
+
+  .dark .bg-gray-100,
+  .dark .bg-gray-100\/5 {
+    background-color: #1f2937;
+  }
+
+  .dark .bg-gray-200 {
+    background-color: #374151;
+  }
+
+  .dark .border-gray-50,
+  .dark .border-gray-100,
+  .dark .border-gray-200 {
+    border-color: #243244;
+  }
+
+  .dark .placeholder\:text-gray-400::placeholder,
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select {
+    color: #f8fafc;
+    caret-color: #f8fafc;
+  }
+
+  .dark .bg-red-50,
+  .dark .bg-red-50\/80 {
+    background-color: rgb(69 10 10 / 0.72);
+  }
+
+  .dark .border-red-100,
+  .dark .border-red-100\/50 {
+    border-color: rgb(153 27 27 / 0.72);
+  }
+
+  .dark .text-red-500,
+  .dark .text-red-600,
+  .dark .text-red-700 {
+    color: #fca5a5;
+  }
+
+  .dark .bg-emerald-50,
+  .dark .bg-emerald-50\/50,
+  .dark .bg-emerald-50\/80 {
+    background-color: rgb(6 78 59 / 0.58);
+  }
+
+  .dark .border-emerald-100,
+  .dark .border-emerald-100\/50,
+  .dark .border-emerald-100\/80 {
+    border-color: rgb(5 150 105 / 0.58);
+  }
+
+  .dark .text-emerald-500,
+  .dark .text-emerald-600,
+  .dark .text-emerald-700 {
+    color: #6ee7b7;
+  }
+
+  .dark .bg-blue-50,
+  .dark .bg-blue-50\/80 {
+    background-color: rgb(30 58 138 / 0.58);
+  }
+
+  .dark .border-blue-100,
+  .dark .border-blue-100\/50 {
+    border-color: rgb(37 99 235 / 0.58);
+  }
+
+  .dark .text-blue-500,
+  .dark .text-blue-600,
+  .dark .text-blue-700 {
+    color: #93c5fd;
+  }
+
+  .dark .bg-orange-50,
+  .dark .bg-orange-50\/80 {
+    background-color: rgb(67 20 7 / 0.72);
+  }
+
+  .dark .border-orange-100,
+  .dark .border-orange-100\/50 {
+    border-color: rgb(194 65 12 / 0.72);
+  }
+
+  .dark .text-orange-500,
+  .dark .text-orange-600,
+  .dark .text-orange-700 {
+    color: #fdba74;
+  }
+
+  .dark .disabled\:bg-gray-200:disabled {
+    background-color: #334155;
+  }
+
+  .dark .disabled\:text-gray-400:disabled,
+  .dark .disabled\:text-gray-300:disabled {
+    color: #94a3b8;
+  }
+}
