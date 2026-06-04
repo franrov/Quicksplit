@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.vscode
+server/*.log
+server/quicksplit.db
+server/deploy-smoke.db
