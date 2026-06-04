@@ -19,9 +19,11 @@ export function HomeScreen() {
   const { t } = useLanguage();
   const [isEmptyState, setIsEmptyState] = useState(false);
   const [splits, setSplits] = useState<any[]>([]);
+  const [balanceSplits, setBalanceSplits] = useState<any[]>([]);
   const [isLoadingSplits, setIsLoadingSplits] = useState(true);
   const [splitsError, setSplitsError] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [splitInvite, setSplitInvite] = useState<any | null>(null);
   const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
   const initials = currentUser?.name
     ? currentUser.name
@@ -31,12 +33,12 @@ export function HomeScreen() {
         .slice(0, 2)
         .toUpperCase()
     : "QS";
-  const balances = splits.reduce(
+  const balances = balanceSplits.reduce(
     (totals, split) => {
       const participants = Array.isArray(split.participants) ? split.participants : [];
 
       participants.forEach((participant: any) => {
-        if (participant.status === "paid") return;
+        if (participant.status !== "pending") return;
 
         if (Number(participant.userId) === Number(currentUser?.id) && Number(split.user_id) !== Number(currentUser?.id)) {
           totals.youOwe += Number(participant.amount) || 0;
@@ -55,10 +57,13 @@ export function HomeScreen() {
       return;
     }
 
-    axios
-      .get(apiUrl(`/splits?userId=${currentUser.id}&recurring=0`))
-      .then((response) => {
-        setSplits(response.data);
+    Promise.all([
+      axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=0`)),
+      axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=1`)),
+    ])
+      .then(([regularResponse, recurringResponse]) => {
+        setSplits(regularResponse.data);
+        setBalanceSplits([...regularResponse.data, ...recurringResponse.data]);
         setSplitsError("");
       })
       .catch((error) => {
@@ -77,7 +82,52 @@ export function HomeScreen() {
       .catch((error) => {
         console.error("Error loading notification count:", error);
       });
+
+    axios
+      .get(apiUrl(`/notifications?userId=${currentUser.id}`))
+      .then((response) => {
+        const invite = response.data.find((notification: any) => notification.type === "invite" && !notification.is_read);
+        setSplitInvite(invite || null);
+      })
+      .catch((error) => {
+        console.error("Error loading split invites:", error);
+      });
   }, [currentUser?.id, navigate]);
+
+  const refreshHomeData = async () => {
+    if (!currentUser?.id) return;
+
+    const [regularResponse, recurringResponse, countResponse, notificationsResponse] = await Promise.all([
+      axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=0`)),
+      axios.get(apiUrl(`/splits?userId=${currentUser.id}&recurring=1`)),
+      axios.get(apiUrl(`/notifications/unread-count?userId=${currentUser.id}`)),
+      axios.get(apiUrl(`/notifications?userId=${currentUser.id}`)),
+    ]);
+
+    setSplits(regularResponse.data);
+    setBalanceSplits([...regularResponse.data, ...recurringResponse.data]);
+    setUnreadNotificationCount(countResponse.data.count || 0);
+    setSplitInvite(
+      notificationsResponse.data.find((notification: any) => notification.type === "invite" && !notification.is_read) || null
+    );
+  };
+
+  const handleInviteResponse = async (response: "accepted" | "rejected") => {
+    if (!currentUser?.id || !splitInvite?.split_id) return;
+
+    try {
+      await axios.post(apiUrl(`/splits/${splitInvite.split_id}/respond`), {
+        userId: currentUser.id,
+        response,
+      });
+      toast.success(response === "accepted" ? "Split accepted" : "Split rejected");
+      setSplitInvite(null);
+      await refreshHomeData();
+    } catch (error) {
+      console.error("Error responding to invite:", error);
+      toast.error("Could not respond to split invite");
+    }
+  };
 
   const handleDeleteSplit = async (splitId: number) => {
     if (!currentUser?.id) return;
@@ -97,6 +147,40 @@ export function HomeScreen() {
 
   return (
     <div className="flex flex-col min-h-full">
+      {splitInvite && (
+        <div className="absolute inset-0 z-30 bg-black/50 flex items-center justify-center px-6">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-800">
+            <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 flex items-center justify-center mb-4">
+              <Receipt size={28} />
+            </div>
+            <p className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">
+              Split Invite
+            </p>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-50 mb-2">{splitInvite.split_title}</h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium mb-5">
+              You were added to this split for{" "}
+              <span className="font-black text-gray-900 dark:text-gray-50">
+                ${Number(splitInvite.amount || 0).toFixed(2)}
+              </span>
+              . Accept to join it, or reject and the creator will cover your share.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => handleInviteResponse("rejected")}
+                className="rounded-2xl p-4 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-50 font-black active:scale-[0.98] transition-all"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => handleInviteResponse("accepted")}
+                className="rounded-2xl p-4 bg-gray-900 dark:bg-gray-50 text-white dark:text-gray-950 font-black active:scale-[0.98] transition-all"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Top action bar with notification + profile */}
       <div className="flex items-center justify-end gap-2 px-6 pt-4 pb-2">
         <button

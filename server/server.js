@@ -252,7 +252,7 @@ const upsertBalanceNotification = ({ userId, splitId, participant, splitTitle })
 };
 
 const createBalanceNotifications = async ({ userId, splitId, splitTitle, participants, ownerId = userId }) => {
-  const pendingParticipants = participants.filter((participant) => participant.status !== "paid");
+  const pendingParticipants = participants.filter((participant) => participant.status === "pending");
   const writes = [];
 
   pendingParticipants.forEach((participant) => {
@@ -276,7 +276,7 @@ const createBalanceNotifications = async ({ userId, splitId, splitTitle, partici
 
 const createReminderMessageNotifications = async ({ splitId, splitTitle, participants, ownerId, message, tone }) => {
   const pendingParticipants = participants.filter(
-    (participant) => participant.status !== "paid" && participant.userId && Number(participant.userId) !== Number(ownerId)
+    (participant) => participant.status === "pending" && participant.userId && Number(participant.userId) !== Number(ownerId)
   );
 
   await Promise.all(
@@ -299,6 +299,32 @@ const createReminderMessageNotifications = async ({ splitId, splitTitle, partici
   );
 
   return pendingParticipants.length;
+};
+
+const createInviteNotifications = async ({ splitId, splitTitle, participants, ownerId }) => {
+  const invitedParticipants = participants.filter(
+    (participant) => participant.status === "invited" && participant.userId && Number(participant.userId) !== Number(ownerId)
+  );
+
+  await Promise.all(
+    invitedParticipants.map((participant) =>
+      runDb(
+        "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, message, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        [
+          participant.userId,
+          splitId,
+          "invite",
+          participant.id,
+          participant.name,
+          participant.amount,
+          splitTitle,
+          "You were invited to join this split.",
+        ]
+      )
+    )
+  );
+
+  return invitedParticipants.length;
 };
 
 const createPaidNotification = ({ userId, splitId, splitTitle, amount, participantName = "Split" }) => {
@@ -736,7 +762,13 @@ app.post("/splits", (req, res) => {
       }
 
       const splitId = this.lastID;
-      const storedParticipants = Array.isArray(participants) ? participants : [];
+      const storedParticipants = (Array.isArray(participants) ? participants : []).map((participant) => ({
+        ...participant,
+        status:
+          participant.userId && Number(participant.userId) !== Number(userId) && participant.status !== "paid"
+            ? "invited"
+            : participant.status || "pending",
+      }));
 
       try {
         await Promise.all(storedParticipants.map((participant) =>
@@ -753,8 +785,7 @@ app.post("/splits", (req, res) => {
           )
         ));
 
-        await createBalanceNotifications({
-          userId,
+        await createInviteNotifications({
           splitId,
           splitTitle: title,
           participants: storedParticipants,
@@ -779,6 +810,101 @@ app.post("/splits", (req, res) => {
       });
     }
   );
+});
+
+app.post("/splits/:id/respond", (req, res) => {
+  const splitId = Number(req.params.id);
+  const { userId, response } = req.body;
+
+  if (!splitId || !userId || !["accepted", "rejected"].includes(response)) {
+    return res.status(400).json({ message: "split id, userId, and response are required" });
+  }
+
+  db.get("SELECT * FROM splits WHERE id = ?", [splitId], (splitErr, split) => {
+    if (splitErr) {
+      return res.status(500).json({ message: "Could not load split" });
+    }
+
+    if (!split) {
+      return res.status(404).json({ message: "Split not found" });
+    }
+
+    db.get(
+      "SELECT * FROM split_participants WHERE split_id = ? AND user_id = ?",
+      [splitId, userId],
+      async (participantErr, participant) => {
+        if (participantErr) {
+          return res.status(500).json({ message: "Could not load participant" });
+        }
+
+        if (!participant || participant.status !== "invited") {
+          return res.status(404).json({ message: "Invitation not found" });
+        }
+
+        try {
+          if (response === "accepted") {
+            await runDb("UPDATE split_participants SET status = 'pending' WHERE id = ?", [participant.id]);
+            await runDb("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = 'invite'", [
+              userId,
+              splitId,
+            ]);
+
+            await upsertBalanceNotification({
+              userId,
+              splitId,
+              participant: { id: "me", name: "You", amount: participant.amount },
+              splitTitle: split.title,
+            });
+            await upsertBalanceNotification({
+              userId: split.user_id,
+              splitId,
+              participant: {
+                id: participant.participant_key,
+                name: participant.name,
+                amount: participant.amount,
+              },
+              splitTitle: split.title,
+            });
+          } else {
+            await runDb("UPDATE split_participants SET status = 'rejected', amount = 0 WHERE id = ?", [participant.id]);
+            await runDb(
+              "UPDATE split_participants SET amount = amount + ? WHERE split_id = ? AND user_id = ?",
+              [participant.amount, splitId, split.user_id]
+            );
+            await runDb("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = 'invite'", [
+              userId,
+              splitId,
+            ]);
+          }
+
+          db.get("SELECT * FROM splits WHERE id = ?", [splitId], (updatedErr, updatedSplit) => {
+            if (updatedErr || !updatedSplit) {
+              return res.status(500).json({ message: "Could not refresh split" });
+            }
+
+            getSplitParticipants(updatedSplit, (participantsErr, participants) => {
+              if (participantsErr) {
+                return res.status(500).json({ message: "Could not load split participants" });
+              }
+
+              const hasOpenParticipants = participants.some((item) => item.status === "pending" || item.status === "invited");
+              const nextStatus = hasOpenParticipants ? "pending" : "settled";
+
+              db.run("UPDATE splits SET status = ? WHERE id = ?", [nextStatus, splitId], () => {
+                res.json({
+                  ...formatSplitWithParticipants({ ...updatedSplit, status: nextStatus }, participants),
+                  response,
+                });
+              });
+            });
+          });
+        } catch (err) {
+          console.error("Error responding to split invitation:", err);
+          res.status(500).json({ message: "Could not respond to invitation" });
+        }
+      }
+    );
+  });
 });
 
 app.post("/splits/:id/reminders", (req, res) => {

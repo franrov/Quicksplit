@@ -96,11 +96,11 @@ export function ReviewSplitScreen() {
             description:
               extraCount > 0
                 ? language === "es"
-                  ? `Y ${extraCount} más recibieron recordatorios.`
-                  : `And ${extraCount} more received reminders.`
+                  ? `Y ${extraCount} más recibieron invitaciones.`
+                  : `And ${extraCount} more received invites.`
                 : language === "es"
-                  ? "Recordatorio agregado a notificaciones."
-                  : "Reminder added to notifications.",
+                  ? "Invitación enviada."
+                  : "Invite sent.",
             duration: 4000,
           }
         );
