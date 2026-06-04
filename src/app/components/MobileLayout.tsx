@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
-import { ChevronLeft, X } from "lucide-react";
+import { ChevronLeft, Home, X } from "lucide-react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -13,6 +13,8 @@ export function MobileLayout() {
   const isLogin = location.pathname === "/";
   const isNewFlow = location.pathname.startsWith("/new");
   const isHouseholdNewFlow = location.pathname.startsWith("/household/new");
+  const showHomeButton = !["/", "/signup", "/home", "/notifications"].includes(location.pathname)
+    && !location.pathname.startsWith("/profile");
 
   const getTitle = () => {
     switch (location.pathname) {
@@ -54,6 +56,16 @@ export function MobileLayout() {
           
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">{getTitle()}</h1>
           
+          <div className="flex items-center justify-end gap-1 min-w-10">
+          {showHomeButton && (
+            <button
+              onClick={() => navigate("/home")}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-200 active:bg-gray-200 dark:active:bg-gray-800 transition-colors"
+              aria-label="Back to Home"
+            >
+              <Home size={20} />
+            </button>
+          )}
           {(isNewFlow || isHouseholdNewFlow) ? (
             <AlertDialog.Root>
               <AlertDialog.Trigger asChild>
@@ -86,9 +98,8 @@ export function MobileLayout() {
                 </AlertDialog.Content>
               </AlertDialog.Portal>
             </AlertDialog.Root>
-          ) : (
-            <div className="w-10"></div>
-          )}
+          ) : null}
+          </div>
         </header>
 
         {/* Content */}

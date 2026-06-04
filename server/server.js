@@ -792,6 +792,7 @@ app.get("/notifications", (req, res) => {
         ON split_participants.split_id = notifications.split_id
         AND split_participants.user_id = notifications.user_id
       WHERE notifications.user_id = ?
+      AND (notifications.split_id IS NULL OR splits.id IS NOT NULL)
       AND NOT (
         notifications.type IN ('balance', 'reminder')
         AND (
@@ -829,6 +830,7 @@ app.get("/notifications/unread-count", (req, res) => {
         AND split_participants.user_id = notifications.user_id
       WHERE notifications.user_id = ?
       AND notifications.is_read = 0
+      AND (notifications.split_id IS NULL OR splits.id IS NOT NULL)
       AND NOT (
         notifications.type IN ('balance', 'reminder')
         AND (
@@ -1137,6 +1139,8 @@ app.post("/splits/:id/respond", (req, res) => {
         }
 
         try {
+          const paymentOwnerId = split.payer_user_id || split.user_id;
+
           if (response === "accepted") {
             await runDb("UPDATE split_participants SET status = 'pending' WHERE id = ?", [participant.id]);
             await runDb("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = 'invite'", [
@@ -1151,7 +1155,7 @@ app.post("/splits/:id/respond", (req, res) => {
               splitTitle: split.title,
             });
             await upsertBalanceNotification({
-              userId: split.user_id,
+              userId: paymentOwnerId,
               splitId,
               participant: {
                 id: participant.participant_key,
@@ -1164,7 +1168,7 @@ app.post("/splits/:id/respond", (req, res) => {
             await runDb("UPDATE split_participants SET status = 'rejected', amount = 0 WHERE id = ?", [participant.id]);
             await runDb(
               "UPDATE split_participants SET amount = amount + ? WHERE split_id = ? AND user_id = ?",
-              [participant.amount, splitId, split.payer_user_id || split.user_id]
+              [participant.amount, splitId, paymentOwnerId]
             );
             await runDb("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND split_id = ? AND type = 'invite'", [
               userId,
@@ -1233,8 +1237,8 @@ app.post("/splits/:id/payer-response", (req, res) => {
         splitId,
       ]);
       await runDb(
-        "UPDATE split_participants SET status = CASE WHEN user_id = ? THEN 'paid' WHEN status = 'waiting' THEN 'invited' ELSE status END WHERE split_id = ?",
-        [userId, splitId]
+        "UPDATE split_participants SET status = CASE WHEN user_id = ? THEN 'paid' WHEN user_id = ? THEN 'pending' WHEN status = 'waiting' THEN 'invited' ELSE status END WHERE split_id = ?",
+        [userId, split.user_id, splitId]
       );
       await runDb("UPDATE splits SET status = 'pending' WHERE id = ?", [splitId]);
 
@@ -1277,7 +1281,7 @@ app.post("/splits/:id/reminders", (req, res) => {
     return res.status(400).json({ message: "split id and userId are required" });
   }
 
-  db.get("SELECT * FROM splits WHERE id = ? AND user_id = ?", [splitId, userId], (err, split) => {
+  db.get("SELECT * FROM splits WHERE id = ? AND (user_id = ? OR payer_user_id = ?)", [splitId, userId, userId], (err, split) => {
     if (err) {
       return res.status(500).json({ message: "Could not load split" });
     }
@@ -1296,7 +1300,7 @@ app.post("/splits/:id/reminders", (req, res) => {
           splitId,
           splitTitle: split.title,
           participants,
-          ownerId: split.user_id,
+          ownerId: split.payer_user_id || split.user_id,
           message: String(message || "").trim() || "Friendly reminder to settle this split when you can.",
           tone: tone || "custom",
         });

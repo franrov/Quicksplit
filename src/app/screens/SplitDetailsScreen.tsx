@@ -288,7 +288,7 @@ export function SplitDetailsScreen() {
       </div>
 
       <div className="pt-8 pb-4 mt-auto flex gap-4">
-        {isCreator ? (
+        {isPaymentOwner ? (
           <>
             <button
               onClick={() => navigate(`/split/${split.id}/remind`)}

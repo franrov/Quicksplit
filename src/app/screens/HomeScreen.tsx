@@ -139,8 +139,14 @@ export function HomeScreen() {
       toast.success(response === "accepted" ? "Split accepted" : "Split rejected");
       setSplitInvite(null);
       await refreshHomeData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error responding to invite:", error);
+      if (error.response?.status === 404) {
+        setSplitInvite(null);
+        await refreshHomeData();
+        toast.error("This request is no longer available");
+        return;
+      }
       toast.error(error.response?.data?.message || "Could not respond to split invite");
       if (error.response?.status === 402) {
         navigate("/wallet/deposit");
