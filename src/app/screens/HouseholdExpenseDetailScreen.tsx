@@ -34,6 +34,8 @@ export function HouseholdExpenseDetailScreen() {
   const [split, setSplit] = useState<Split | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isConfirmPayOpen, setIsConfirmPayOpen] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
 
   useEffect(() => {
     if (!currentUser?.id) {
@@ -59,9 +61,13 @@ export function HouseholdExpenseDetailScreen() {
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
   const canMarkPaid = !isCreator && myParticipant?.status !== "paid";
+  const paymentAmount = Number(myParticipant?.amount || 0);
+  const walletBalance = Number(currentUser?.wallet_balance ?? 1000);
 
   const handleMarkPaid = async () => {
     if (!split || !currentUser?.id) return;
+
+    setIsPaying(true);
 
     try {
       const response = await axios.patch(apiUrl(`/splits/${split.id}/pay`), {
@@ -69,13 +75,17 @@ export function HouseholdExpenseDetailScreen() {
       });
       setSplit(response.data);
       updateStoredWalletBalance(response.data.wallet_balance);
+      setIsConfirmPayOpen(false);
       toast.success(language === "es" ? "Pago marcado como enviado" : "Payment marked as sent", { duration: 2000 });
     } catch (error: any) {
       console.error("Error marking paid:", error);
       toast.error(error.response?.data?.message || (language === "es" ? "No se pudo marcar como pagado" : "Could not mark payment"));
       if (error.response?.status === 402) {
+        setIsConfirmPayOpen(false);
         navigate("/wallet/deposit");
       }
+    } finally {
+      setIsPaying(false);
     }
   };
 
@@ -106,6 +116,61 @@ export function HouseholdExpenseDetailScreen() {
 
   return (
     <div className="p-6 flex flex-col min-h-[calc(100vh-80px)] sm:min-h-[calc(800px-80px)]">
+      {isConfirmPayOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-6">
+          <div className="w-full max-w-[360px] bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-800">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 flex items-center justify-center mb-4">
+              <CheckCircle2 size={28} />
+            </div>
+            <p className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">
+              {language === "es" ? "Confirmar pago" : "Confirm payment"}
+            </p>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-50 mb-3">
+              {language === "es" ? "Marcar como pagado?" : "Mark as paid?"}
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium mb-5">
+              {language === "es" ? "Esto restará " : "This will subtract "}
+              <span className="font-black text-gray-900 dark:text-gray-50">${paymentAmount.toFixed(2)}</span>
+              {language === "es"
+                ? ` de tu balance y resolverá tu pago de ${split.title}.`
+                : ` from your wallet balance and resolve your payment for ${split.title}.`}
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="rounded-2xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 p-3">
+                <p className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  {language === "es" ? "Balance" : "Balance"}
+                </p>
+                <p className="text-lg font-black text-gray-900 dark:text-gray-50">${walletBalance.toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 p-3">
+                <p className="text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-300">
+                  {language === "es" ? "Pagas" : "Paying"}
+                </p>
+                <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">${paymentAmount.toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setIsConfirmPayOpen(false)}
+                disabled={isPaying}
+                className="rounded-2xl p-4 bg-gray-100 dark:bg-gray-800 disabled:text-gray-400 text-gray-900 dark:text-gray-50 font-black active:scale-[0.98] transition-all"
+              >
+                {language === "es" ? "Cancelar" : "Cancel"}
+              </button>
+              <button
+                onClick={handleMarkPaid}
+                disabled={isPaying}
+                className="rounded-2xl p-4 bg-emerald-500 disabled:bg-gray-200 disabled:text-gray-400 text-white font-black active:scale-[0.98] transition-all"
+              >
+                {isPaying ? (language === "es" ? "Pagando..." : "Paying...") : language === "es" ? "Confirmar" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-8 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col items-center text-center mb-8">
         <div className="w-20 h-20 bg-blue-50 dark:bg-blue-950/40 rounded-full flex items-center justify-center mb-5 text-blue-600 dark:text-blue-300">
           <Receipt size={36} strokeWidth={1.5} />
@@ -205,12 +270,12 @@ export function HouseholdExpenseDetailScreen() {
           </button>
         ) : (
           <button
-            onClick={handleMarkPaid}
-            disabled={!canMarkPaid}
+            onClick={() => setIsConfirmPayOpen(true)}
+            disabled={!canMarkPaid || isPaying}
             className="w-full bg-emerald-500 disabled:bg-gray-200 dark:disabled:bg-gray-800 disabled:text-gray-400 text-white rounded-2xl p-4 font-bold text-lg shadow-[0_8px_30px_rgb(16,185,129,0.3)] disabled:shadow-none active:scale-[0.98] transition-all flex justify-center items-center gap-2"
           >
             <CheckCircle2 size={20} />
-            {language === "es" ? "Marcar Pagado" : "Mark Paid"}
+            {language === "es" ? "Marcar como Pagado" : "Mark as Paid"}
           </button>
         )}
       </div>
