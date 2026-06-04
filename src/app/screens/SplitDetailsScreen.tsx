@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Bell, CheckCircle2, Receipt } from "lucide-react";
+import { Bell, CheckCircle2, PauseCircle, Receipt, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
@@ -66,10 +66,15 @@ export function SplitDetailsScreen() {
           },
         ];
 
-  const pendingCount = participants.filter((participant) => participant.status !== "paid").length;
+  const splitStatus = String(split?.status || "").toLowerCase();
+  const isSuspended = splitStatus === "suspended";
+  const isSettled = splitStatus === "settled";
+  const pendingCount = isSuspended ? 0 : participants.filter((participant) => participant.status !== "paid" && participant.status !== "suspended").length;
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
-  const canMarkPaid = !isCreator && myParticipant?.status !== "paid";
+  const canMarkPaid = !isCreator && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
+  const canDelete = isCreator || isSettled;
+  const canSuspend = isCreator && !isSettled && !isSuspended;
   const paymentAmount = Number(myParticipant?.amount || 0);
   const walletBalance = Number(currentUser?.wallet_balance ?? 1000);
 
@@ -112,6 +117,41 @@ export function SplitDetailsScreen() {
       }
     } finally {
       setIsPaying(false);
+    }
+  };
+
+  const handleSuspend = async () => {
+    if (!split || !currentUser?.id) return;
+
+    const shouldSuspend = window.confirm("Suspend this split? Pending payments and reminders will stop.");
+    if (!shouldSuspend) return;
+
+    try {
+      const response = await axios.patch(apiUrl(`/splits/${split.id}/suspend`), {
+        userId: currentUser.id,
+      });
+
+      setSplit(response.data);
+      toast.success("Split suspended");
+    } catch (error: any) {
+      console.error("Error suspending split:", error);
+      toast.error(error.response?.data?.message || "Could not suspend split");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!split || !currentUser?.id) return;
+
+    const shouldDelete = window.confirm("Delete this split? This cannot be undone.");
+    if (!shouldDelete) return;
+
+    try {
+      await axios.delete(apiUrl(`/splits/${split.id}?userId=${currentUser.id}`));
+      toast.success("Split deleted");
+      navigate("/home", { replace: true });
+    } catch (error: any) {
+      console.error("Error deleting split:", error);
+      toast.error(error.response?.data?.message || "Could not delete split");
     }
   };
 
@@ -195,12 +235,14 @@ export function SplitDetailsScreen() {
         <p className="text-5xl font-black text-gray-900 tracking-tight">${Number(split.amount).toFixed(2)}</p>
         <div
           className={`mt-4 px-4 py-1.5 rounded-full text-sm font-bold border ${
-            pendingCount === 0
+            isSuspended
+              ? "bg-gray-50 text-gray-600 border-gray-100"
+              : pendingCount === 0
               ? "bg-emerald-50 text-emerald-700 border-emerald-100"
               : "bg-orange-50 text-orange-700 border-orange-100"
           }`}
         >
-          {pendingCount === 0 ? "Settled" : `${pendingCount} pending ${pendingCount === 1 ? "payment" : "payments"}`}
+          {isSuspended ? "Suspended" : pendingCount === 0 ? "Settled" : `${pendingCount} pending ${pendingCount === 1 ? "payment" : "payments"}`}
         </div>
       </div>
 
@@ -270,6 +312,28 @@ export function SplitDetailsScreen() {
           </button>
         )}
       </div>
+      {(canSuspend || canDelete) && (
+        <div className={`grid gap-3 pb-4 ${canSuspend && canDelete ? "grid-cols-2" : "grid-cols-1"}`}>
+          {canSuspend && (
+            <button
+              onClick={handleSuspend}
+              className="bg-orange-50 text-orange-600 border border-orange-100 rounded-2xl p-4 font-bold active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+            >
+              <PauseCircle size={20} />
+              Suspend
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              className="bg-red-50 text-red-600 border border-red-100 rounded-2xl p-4 font-bold active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+            >
+              <Trash2 size={20} />
+              Delete
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

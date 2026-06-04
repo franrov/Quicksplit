@@ -1271,6 +1271,57 @@ app.patch("/splits/:id/pay", (req, res) => {
   );
 });
 
+app.patch("/splits/:id/suspend", (req, res) => {
+  const splitId = Number(req.params.id);
+  const { userId } = req.body;
+
+  if (!splitId || !userId) {
+    return res.status(400).json({ message: "split id and userId are required" });
+  }
+
+  db.get("SELECT * FROM splits WHERE id = ? AND user_id = ?", [splitId, userId], (err, split) => {
+    if (err) {
+      return res.status(500).json({ message: "Could not load split" });
+    }
+
+    if (!split) {
+      return res.status(404).json({ message: "Only the creator can suspend this split" });
+    }
+
+    if (split.status === "settled") {
+      return res.status(409).json({ message: "Settled splits do not need to be suspended" });
+    }
+
+    db.run("UPDATE splits SET status = 'suspended' WHERE id = ? AND user_id = ?", [splitId, userId], function (updateErr) {
+      if (updateErr) {
+        return res.status(500).json({ message: "Could not suspend split" });
+      }
+
+      db.run("UPDATE split_participants SET status = 'suspended' WHERE split_id = ? AND status != 'paid'", [splitId]);
+      db.run("UPDATE notifications SET is_read = 1 WHERE split_id = ? AND type IN (?, ?, ?)", [
+        splitId,
+        "balance",
+        "invite",
+        "reminder",
+      ]);
+
+      db.get("SELECT * FROM splits WHERE id = ?", [splitId], (splitErr, updatedSplit) => {
+        if (splitErr || !updatedSplit) {
+          return res.status(500).json({ message: "Could not load suspended split" });
+        }
+
+        getSplitParticipants(updatedSplit, (participantsErr, participants) => {
+          if (participantsErr) {
+            return res.status(500).json({ message: "Could not load participants" });
+          }
+
+          res.json(formatSplitWithParticipants(updatedSplit, participants));
+        });
+      });
+    });
+  });
+});
+
 app.delete("/splits/:id", (req, res) => {
   const splitId = Number(req.params.id);
   const userId = Number(req.query.userId);
@@ -1279,7 +1330,33 @@ app.delete("/splits/:id", (req, res) => {
     return res.status(400).json({ message: "split id and userId are required" });
   }
 
-  db.run("DELETE FROM splits WHERE id = ? AND user_id = ?", [splitId, userId], function (err) {
+  db.get(
+    `
+      SELECT DISTINCT splits.*
+      FROM splits
+      LEFT JOIN split_participants ON split_participants.split_id = splits.id
+      WHERE splits.id = ? AND (splits.user_id = ? OR split_participants.user_id = ?)
+    `,
+    [splitId, userId, userId],
+    (loadErr, split) => {
+      if (loadErr) {
+        return res.status(500).json({ message: "Could not load split" });
+      }
+
+      if (!split) {
+        return res.status(404).json({ message: "Split not found" });
+      }
+
+      const isCreator = Number(split.user_id) === Number(userId);
+      const isSettled = split.status === "settled";
+
+      if (!isCreator && !isSettled) {
+        return res.status(403).json({ message: "Only the creator can delete an active split" });
+      }
+
+      db.run("DELETE FROM notifications WHERE split_id = ?", [splitId]);
+      db.run("DELETE FROM split_participants WHERE split_id = ?", [splitId]);
+      db.run("DELETE FROM splits WHERE id = ?", [splitId], function (err) {
     if (err) {
       return res.status(500).json({ message: "Could not delete split" });
     }
@@ -1288,11 +1365,10 @@ app.delete("/splits/:id", (req, res) => {
       return res.status(404).json({ message: "Split not found" });
     }
 
-    db.run("DELETE FROM notifications WHERE user_id = ? AND split_id = ?", [userId, splitId]);
-    db.run("DELETE FROM split_participants WHERE split_id = ?", [splitId]);
-
     res.json({ id: splitId });
   });
+    }
+  );
 });
 
 if (isProduction) {

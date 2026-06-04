@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleDashed,
   Home as HomeIcon,
+  PauseCircle,
   Plus,
   Receipt,
   Trash2,
@@ -39,6 +40,8 @@ export function HomeScreen() {
   const balances = balanceSplits.reduce(
     (totals, split) => {
       const participants = Array.isArray(split.participants) ? split.participants : [];
+
+      if (String(split.status).toLowerCase() === "suspended") return totals;
 
       participants.forEach((participant: any) => {
         if (participant.status !== "pending") return;
@@ -147,10 +150,30 @@ export function HomeScreen() {
     try {
       await axios.delete(apiUrl(`/splits/${splitId}?userId=${currentUser.id}`));
       setSplits((currentSplits) => currentSplits.filter((split) => split.id !== splitId));
+      setBalanceSplits((currentSplits) => currentSplits.filter((split) => split.id !== splitId));
       toast.success("Split deleted");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting split:", error);
-      toast.error("Could not delete split");
+      toast.error(error.response?.data?.message || "Could not delete split");
+    }
+  };
+
+  const handleSuspendSplit = async (splitId: number) => {
+    if (!currentUser?.id) return;
+
+    const shouldSuspend = window.confirm("Suspend this split? Pending payments and reminders will stop.");
+    if (!shouldSuspend) return;
+
+    try {
+      const response = await axios.patch(apiUrl(`/splits/${splitId}/suspend`), {
+        userId: currentUser.id,
+      });
+      setSplits((currentSplits) => currentSplits.map((split) => (split.id === splitId ? response.data : split)));
+      setBalanceSplits((currentSplits) => currentSplits.map((split) => (split.id === splitId ? response.data : split)));
+      toast.success("Split suspended");
+    } catch (error: any) {
+      console.error("Error suspending split:", error);
+      toast.error(error.response?.data?.message || "Could not suspend split");
     }
   };
 
@@ -319,9 +342,10 @@ export function HomeScreen() {
                       title={split.title}
                       amount={`$${Number(split.amount).toFixed(2)}`}
                       status={split.status}
-                      settled={String(split.status).toLowerCase() === "settled"}
+                      isCreator={Number(split.user_id) === Number(currentUser?.id)}
                       onClick={() => navigate(`/split/${split.id}`)}
                       onDelete={() => handleDeleteSplit(split.id)}
+                      onSuspend={() => handleSuspendSplit(split.id)}
                     />
                   ))
                 )}
@@ -342,7 +366,13 @@ export function HomeScreen() {
   );
 }
 
-function SplitCard({ title, amount, status, settled, onClick, onDelete }: any) {
+function SplitCard({ title, amount, status, isCreator, onClick, onDelete, onSuspend }: any) {
+  const normalizedStatus = String(status).toLowerCase();
+  const settled = normalizedStatus === "settled";
+  const suspended = normalizedStatus === "suspended";
+  const canDelete = isCreator || settled;
+  const canSuspend = isCreator && !settled && !suspended;
+
   return (
     <div
       onClick={onClick}
@@ -350,7 +380,7 @@ function SplitCard({ title, amount, status, settled, onClick, onDelete }: any) {
     >
       <div
         className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
-          settled ? "bg-gray-100 text-gray-400" : "bg-emerald-50 text-emerald-600"
+          settled || suspended ? "bg-gray-100 text-gray-400" : "bg-emerald-50 text-emerald-600"
         }`}
       >
         <Receipt size={24} />
@@ -360,26 +390,42 @@ function SplitCard({ title, amount, status, settled, onClick, onDelete }: any) {
         <div className="flex items-center gap-1.5 mt-1">
           {settled ? (
             <CheckCircle2 size={14} className="text-gray-400" />
+          ) : suspended ? (
+            <PauseCircle size={14} className="text-gray-400" />
           ) : (
             <CircleDashed size={14} className="text-orange-500" />
           )}
-          <p className={`text-sm ${settled ? "text-gray-500" : "text-orange-600 font-medium"}`}>
+          <p className={`text-sm capitalize ${settled || suspended ? "text-gray-500" : "text-orange-600 font-medium"}`}>
             {status}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <div className="font-black text-gray-900">{amount}</div>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 active:scale-95 transition-all"
-          aria-label={`Delete ${title}`}
-        >
-          <Trash2 size={17} />
-        </button>
+        {canSuspend && (
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              onSuspend();
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-gray-300 hover:text-orange-500 hover:bg-orange-50 active:scale-95 transition-all"
+            aria-label={`Suspend ${title}`}
+          >
+            <PauseCircle size={17} />
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 active:scale-95 transition-all"
+            aria-label={`Delete ${title}`}
+          >
+            <Trash2 size={17} />
+          </button>
+        )}
       </div>
     </div>
   );

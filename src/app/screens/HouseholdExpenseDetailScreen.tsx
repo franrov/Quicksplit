@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Bell, CalendarDays, CheckCircle2, Receipt, Repeat } from "lucide-react";
+import { Bell, CalendarDays, CheckCircle2, PauseCircle, Receipt, Repeat, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { apiUrl } from "../api";
@@ -57,10 +57,15 @@ export function HouseholdExpenseDetailScreen() {
   }, [currentUser?.id, id, language, navigate]);
 
   const participants = split?.participants || [];
-  const pendingCount = participants.filter((participant) => participant.status !== "paid").length;
+  const splitStatus = String(split?.status || "").toLowerCase();
+  const isSuspended = splitStatus === "suspended";
+  const isSettled = splitStatus === "settled";
+  const pendingCount = isSuspended ? 0 : participants.filter((participant) => participant.status !== "paid" && participant.status !== "suspended").length;
   const isCreator = Number(split?.user_id) === Number(currentUser?.id);
   const myParticipant = participants.find((participant) => Number(participant.userId) === Number(currentUser?.id));
-  const canMarkPaid = !isCreator && myParticipant?.status !== "paid";
+  const canMarkPaid = !isCreator && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
+  const canDelete = isCreator || isSettled;
+  const canSuspend = isCreator && !isSettled && !isSuspended;
   const paymentAmount = Number(myParticipant?.amount || 0);
   const walletBalance = Number(currentUser?.wallet_balance ?? 1000);
 
@@ -86,6 +91,47 @@ export function HouseholdExpenseDetailScreen() {
       }
     } finally {
       setIsPaying(false);
+    }
+  };
+
+  const handleSuspend = async () => {
+    if (!split || !currentUser?.id) return;
+
+    const shouldSuspend = window.confirm(
+      language === "es"
+        ? "Suspender este split? Los pagos pendientes y recordatorios se detendrán."
+        : "Suspend this split? Pending payments and reminders will stop."
+    );
+    if (!shouldSuspend) return;
+
+    try {
+      const response = await axios.patch(apiUrl(`/splits/${split.id}/suspend`), {
+        userId: currentUser.id,
+      });
+
+      setSplit(response.data);
+      toast.success(language === "es" ? "Split suspendido" : "Split suspended");
+    } catch (error: any) {
+      console.error("Error suspending split:", error);
+      toast.error(error.response?.data?.message || (language === "es" ? "No se pudo suspender" : "Could not suspend split"));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!split || !currentUser?.id) return;
+
+    const shouldDelete = window.confirm(
+      language === "es" ? "Eliminar este split? Esto no se puede deshacer." : "Delete this split? This cannot be undone."
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await axios.delete(apiUrl(`/splits/${split.id}?userId=${currentUser.id}`));
+      toast.success(language === "es" ? "Split eliminado" : "Split deleted");
+      navigate("/household", { replace: true });
+    } catch (error: any) {
+      console.error("Error deleting split:", error);
+      toast.error(error.response?.data?.message || (language === "es" ? "No se pudo eliminar" : "Could not delete split"));
     }
   };
 
@@ -187,7 +233,11 @@ export function HouseholdExpenseDetailScreen() {
           }`}
         >
           {pendingCount === 0
-            ? language === "es"
+            ? isSuspended
+              ? language === "es"
+                ? "Suspendido"
+                : "Suspended"
+              : language === "es"
               ? "Saldado"
               : "Settled"
             : language === "es"
@@ -279,6 +329,28 @@ export function HouseholdExpenseDetailScreen() {
           </button>
         )}
       </div>
+      {(canSuspend || canDelete) && (
+        <div className={`grid gap-3 pb-4 ${canSuspend && canDelete ? "grid-cols-2" : "grid-cols-1"}`}>
+          {canSuspend && (
+            <button
+              onClick={handleSuspend}
+              className="bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-300 border border-orange-100 dark:border-orange-900/50 rounded-2xl p-4 font-bold active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+            >
+              <PauseCircle size={20} />
+              {language === "es" ? "Suspender" : "Suspend"}
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-300 border border-red-100 dark:border-red-900/50 rounded-2xl p-4 font-bold active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+            >
+              <Trash2 size={20} />
+              {language === "es" ? "Eliminar" : "Delete"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
