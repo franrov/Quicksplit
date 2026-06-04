@@ -1,10 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Receipt, Home as HomeIcon, CheckCircle2, CircleDashed } from "lucide-react";
+import axios from "axios";
 
 export function HomeScreen() {
   const navigate = useNavigate();
   const [isEmptyState, setIsEmptyState] = useState(false);
+  const [splits, setSplits] = useState<any[]>([]);
+  const [isLoadingSplits, setIsLoadingSplits] = useState(true);
+  const [splitsError, setSplitsError] = useState("");
+
+  useEffect(() => {
+    axios
+      .get("http://localhost:3001/splits")
+      .then((response) => {
+        setSplits(response.data);
+        setSplitsError("");
+      })
+      .catch((error) => {
+        console.error("Error loading splits:", error);
+        setSplitsError("Start the backend with npm run server");
+      })
+      .finally(() => {
+        setIsLoadingSplits(false);
+      });
+  }, []);
 
   return (
     <div className="p-6 space-y-8 flex flex-col min-h-full">
@@ -20,7 +40,7 @@ export function HomeScreen() {
               <p className="text-2xl font-black text-gray-400">$0.00</p>
             </div>
           </div>
-          
+
           <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
             <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mb-6">
               <Receipt size={48} strokeWidth={1.5} />
@@ -29,8 +49,8 @@ export function HomeScreen() {
             <p className="text-gray-500 font-medium mb-8 max-w-[250px]">
               Create your first split to start sharing expenses with friends.
             </p>
-            <button 
-              onClick={() => navigate('/new')}
+            <button
+              onClick={() => navigate("/new")}
               className="w-full bg-gray-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all"
             >
               <Plus size={24} />
@@ -53,8 +73,8 @@ export function HomeScreen() {
           </div>
 
           {/* Primary Action */}
-          <button 
-            onClick={() => navigate('/new')}
+          <button
+            onClick={() => navigate("/new")}
             className="w-full bg-gray-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98] transition-all"
           >
             <Plus size={24} />
@@ -63,7 +83,7 @@ export function HomeScreen() {
 
           {/* Shortcuts */}
           <button
-            onClick={() => navigate('/household')}
+            onClick={() => navigate("/household")}
             className="w-full bg-white rounded-2xl p-4 flex items-center gap-4 border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
           >
             <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -77,36 +97,42 @@ export function HomeScreen() {
 
           {/* Recent Splits */}
           <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">Recent Splits</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">
+              Recent Splits
+            </h2>
+
             <div className="space-y-3">
-              <SplitCard 
-                title="Dinner at Mayagüez"
-                amount="$84.75"
-                status="2 pending"
-                settled={false}
-                onClick={() => navigate('/split/1')}
-              />
-              <SplitCard 
-                title="Apartment WiFi"
-                amount="$60.00"
-                status="1 pending"
-                settled={false}
-                onClick={() => navigate('/split/2')}
-              />
-              <SplitCard 
-                title="Groceries"
-                amount="$42.60"
-                status="Settled"
-                settled={true}
-                onClick={() => navigate('/split/3')}
-              />
+              {isLoadingSplits ? (
+                <div className="text-center text-gray-500 py-4">
+                  Loading splits...
+                </div>
+              ) : splitsError ? (
+                <div className="text-center text-orange-600 font-medium py-4">
+                  {splitsError}
+                </div>
+              ) : splits.length === 0 ? (
+                <div className="text-center text-gray-500 py-4">
+                  No splits found
+                </div>
+              ) : (
+                splits.map((split) => (
+                  <SplitCard
+                    key={split.id}
+                    title={split.title}
+                    amount={`$${Number(split.amount).toFixed(2)}`}
+                    status={split.status}
+                    settled={String(split.status).toLowerCase() === "settled"}
+                    onClick={() => navigate(`/split/${split.id}`)}
+                  />
+                ))
+              )}
             </div>
           </div>
         </>
       )}
 
       {/* Dev Toggle */}
-      <button 
+      <button
         onClick={() => setIsEmptyState(!isEmptyState)}
         className="mt-auto pt-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-center w-full"
       >
@@ -118,15 +144,28 @@ export function HomeScreen() {
 
 function SplitCard({ title, amount, status, settled, onClick }: any) {
   return (
-    <div onClick={onClick} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer">
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${settled ? 'bg-gray-100 text-gray-400' : 'bg-emerald-50 text-emerald-600'}`}>
+    <div
+      onClick={onClick}
+      className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer"
+    >
+      <div
+        className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+          settled ? "bg-gray-100 text-gray-400" : "bg-emerald-50 text-emerald-600"
+        }`}
+      >
         <Receipt size={24} />
       </div>
       <div className="flex-1">
         <h4 className="font-bold text-gray-900">{title}</h4>
         <div className="flex items-center gap-1.5 mt-1">
-          {settled ? <CheckCircle2 size={14} className="text-gray-400"/> : <CircleDashed size={14} className="text-orange-500"/>}
-          <p className={`text-sm ${settled ? 'text-gray-500' : 'text-orange-600 font-medium'}`}>{status}</p>
+          {settled ? (
+            <CheckCircle2 size={14} className="text-gray-400" />
+          ) : (
+            <CircleDashed size={14} className="text-orange-500" />
+          )}
+          <p className={`text-sm ${settled ? "text-gray-500" : "text-orange-600 font-medium"}`}>
+            {status}
+          </p>
         </div>
       </div>
       <div className="font-black text-gray-900">{amount}</div>

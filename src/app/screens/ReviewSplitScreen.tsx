@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router";
 import { Receipt, CheckCircle, Edit2 } from "lucide-react";
 import { toast } from "sonner";
+import axios from "axios";
 
 export function ReviewSplitScreen() {
   const navigate = useNavigate();
@@ -28,11 +29,28 @@ export function ReviewSplitScreen() {
     return "You paid upfront";
   };
 
-  const handleCreate = () => {
-    toast.success("Split created successfully!", {
-      duration: 3000,
-    });
-    navigate('/');
+  const handleCreate = async () => {
+    try {
+      const response = await axios.post("http://localhost:3001/splits", {
+        title: splitData.title,
+        amount: totalAmount,
+        status: "pending",
+      });
+
+      console.log("Split created:", response.data);
+
+      toast.success("Split created successfully!", {
+        duration: 3000,
+      });
+
+      navigate("/");
+    } catch (error) {
+      console.error("Error creating split:", error);
+
+      toast.error("Failed to create split", {
+        duration: 3000,
+      });
+    }
   };
 
   return (
