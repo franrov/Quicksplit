@@ -151,57 +151,76 @@ const formatNotification = (notification) => ({
   created_at: notification.created_at,
 });
 
-const upsertReminderNotification = ({ userId, splitId, participant, splitTitle }) => {
-  db.get(
-    "SELECT id FROM notifications WHERE user_id = ? AND split_id = ? AND type = ? AND participant_id = ?",
-    [userId, splitId, "reminder", participant.id],
-    (err, existing) => {
+const runDb = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
       if (err) {
-        console.error("Error checking reminder notification:", err);
+        reject(err);
         return;
       }
 
-      if (existing) {
-        db.run(
-          "UPDATE notifications SET is_read = 0, amount = ?, participant_name = ?, split_title = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?",
-          [participant.amount, participant.name, splitTitle, existing.id]
-        );
+      resolve(this);
+    });
+  });
+
+const getDb = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) {
+        reject(err);
         return;
       }
 
-      db.run(
-        "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [userId, splitId, "reminder", participant.id, participant.name, participant.amount, splitTitle]
-      );
+      resolve(row);
+    });
+  });
+
+const upsertReminderNotification = ({ userId, splitId, participant, splitTitle }) => {
+  return getDb(
+    "SELECT id FROM notifications WHERE user_id = ? AND split_id = ? AND type = ? AND participant_id = ?",
+    [userId, splitId, "reminder", participant.id]
+  ).then((existing) => {
+    if (existing) {
+      return runDb(
+        "UPDATE notifications SET is_read = 0, amount = ?, participant_name = ?, split_title = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [participant.amount, participant.name, splitTitle, existing.id]
+      ).then(() => true);
     }
-  );
+
+    return runDb(
+      "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [userId, splitId, "reminder", participant.id, participant.name, participant.amount, splitTitle]
+    ).then(() => true);
+  });
 };
 
-const createReminderNotifications = ({ userId, splitId, splitTitle, participants, ownerId = userId }) => {
+const createReminderNotifications = async ({ userId, splitId, splitTitle, participants, ownerId = userId }) => {
   const pendingParticipants = participants.filter((participant) => participant.status !== "paid");
+  const writes = [];
 
   pendingParticipants.forEach((participant) => {
     if (participant.userId && Number(participant.userId) !== Number(ownerId)) {
-      upsertReminderNotification({
+      writes.push(upsertReminderNotification({
         userId: participant.userId,
         splitId,
         participant: { ...participant, id: "me", name: "You" },
         splitTitle,
-      });
+      }));
     }
 
     if (Number(userId) === Number(ownerId) && participant.id !== "me") {
-      upsertReminderNotification({ userId, splitId, participant, splitTitle });
+      writes.push(upsertReminderNotification({ userId, splitId, participant, splitTitle }));
     }
   });
 
-  return pendingParticipants.length;
+  const results = await Promise.all(writes);
+  return results.filter(Boolean).length;
 };
 
-const createPaidNotification = ({ userId, splitId, splitTitle, amount }) => {
+const createPaidNotification = ({ userId, splitId, splitTitle, amount, participantName = "Split" }) => {
   db.run(
     "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-    [userId, splitId, "paid", "split", "Split", amount, splitTitle]
+    [userId, splitId, "paid", "split", participantName, amount, splitTitle]
   );
 };
 
@@ -562,7 +581,7 @@ app.post("/splits", (req, res) => {
       payer || "me",
       JSON.stringify(Array.isArray(participants) ? participants : []),
     ],
-    function (err) {
+    async function (err) {
       if (err) {
         return res.status(500).json(err);
       }
@@ -570,8 +589,9 @@ app.post("/splits", (req, res) => {
       const splitId = this.lastID;
       const storedParticipants = Array.isArray(participants) ? participants : [];
 
-      storedParticipants.forEach((participant) => {
-        db.run(
+      try {
+        await Promise.all(storedParticipants.map((participant) =>
+          runDb(
           "INSERT INTO split_participants(split_id, user_id, participant_key, name, amount, status) VALUES (?, ?, ?, ?, ?, ?)",
           [
             splitId,
@@ -581,16 +601,19 @@ app.post("/splits", (req, res) => {
             participant.amount,
             participant.status || "pending",
           ]
-        );
-      });
+          )
+        ));
 
-      createReminderNotifications({
-        userId,
-        splitId,
-        splitTitle: title,
-        participants: storedParticipants,
-        ownerId: userId,
-      });
+        await createReminderNotifications({
+          userId,
+          splitId,
+          splitTitle: title,
+          participants: storedParticipants,
+          ownerId: userId,
+        });
+      } catch (notificationErr) {
+        console.error("Error storing split participants/reminders:", notificationErr);
+      }
 
       res.json({
         id: splitId,
@@ -623,20 +646,25 @@ app.post("/splits/:id/reminders", (req, res) => {
       return res.status(404).json({ message: "Split not found" });
     }
 
-    getSplitParticipants(split, (participantsErr, participants) => {
+    getSplitParticipants(split, async (participantsErr, participants) => {
       if (participantsErr) {
         return res.status(500).json({ message: "Could not load participants" });
       }
 
-      const count = createReminderNotifications({
-        userId,
-        splitId,
-        splitTitle: split.title,
-        participants,
-        ownerId: split.user_id,
-      });
+      try {
+        const count = await createReminderNotifications({
+          userId,
+          splitId,
+          splitTitle: split.title,
+          participants,
+          ownerId: split.user_id,
+        });
 
-      res.json({ count });
+        res.json({ count });
+      } catch (notificationErr) {
+        console.error("Error sending reminders:", notificationErr);
+        res.status(500).json({ message: "Could not send reminders" });
+      }
     });
   });
 });
@@ -711,7 +739,10 @@ app.patch("/splits/:id/pay", (req, res) => {
 
   db.get(
     `
-      SELECT splits.*
+      SELECT
+        splits.*,
+        split_participants.name AS paid_participant_name,
+        split_participants.amount AS paid_participant_amount
       FROM splits
       JOIN split_participants ON split_participants.split_id = splits.id
       WHERE splits.id = ? AND split_participants.user_id = ?
@@ -757,7 +788,8 @@ app.patch("/splits/:id/pay", (req, res) => {
                     userId: split.user_id,
                     splitId,
                     splitTitle: split.title,
-                    amount: split.amount,
+                    amount: split.paid_participant_amount || split.amount,
+                    participantName: split.paid_participant_name || "Someone",
                   });
 
                   db.get("SELECT * FROM splits WHERE id = ?", [splitId], (splitErr, updatedSplit) => {

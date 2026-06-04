@@ -1,93 +1,205 @@
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Home, Zap, Wifi, ShoppingCart, CheckCircle2, CircleDashed } from "lucide-react";
+import { CheckCircle2, CircleDashed, Plus, Receipt } from "lucide-react";
+import axios from "axios";
+import { apiUrl } from "../api";
+import { useLanguage } from "../context/LanguageContext";
+
+type Participant = {
+  id: string;
+  userId?: number;
+  name: string;
+  amount: number;
+  status: string;
+};
+
+type Split = {
+  id: number;
+  user_id: number;
+  title: string;
+  amount: number;
+  status: string;
+  participants: Participant[];
+};
 
 export function HouseholdExpensesScreen() {
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
+  const currentUser = JSON.parse(localStorage.getItem("quicksplitUser") || "null");
+  const [splits, setSplits] = useState<Split[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const expenses = [
-    { id: 1, title: 'Rent', amount: '1,200', icon: Home, paidBy: 'Ariana', status: 'paid' },
-    { id: 2, title: 'WiFi', amount: '60', icon: Wifi, status: 'pending' },
-    { id: 3, title: 'Electricity', amount: '135', icon: Zap, status: 'pending' },
-    { id: 4, title: 'Groceries', amount: '72.40', icon: ShoppingCart, status: 'settled' },
-  ];
+  useEffect(() => {
+    if (!currentUser?.id) {
+      navigate("/", { replace: true });
+      return;
+    }
 
-  const balances = [
-    { name: 'Ariana', amount: '96.35', type: 'owed' },
-    { name: 'Gabriel', amount: '32.10', type: 'owes' },
-    { name: 'Edward', amount: '32.10', type: 'owes' },
-    { name: 'Ignacio', amount: '32.15', type: 'owes' },
-  ];
+    axios
+      .get(apiUrl(`/splits?userId=${currentUser.id}`))
+      .then((response) => {
+        setSplits(response.data);
+        setErrorMessage("");
+      })
+      .catch((error) => {
+        console.error("Error loading household splits:", error);
+        setErrorMessage(language === "es" ? "No se pudieron cargar los gastos." : "Could not load expenses.");
+      })
+      .finally(() => setIsLoading(false));
+  }, [currentUser?.id, language, navigate]);
+
+  const balances = useMemo(() => {
+    const totals = new Map<string, { name: string; amount: number; type: "owed" | "owes" }>();
+
+    splits.forEach((split) => {
+      const participants = Array.isArray(split.participants) ? split.participants : [];
+
+      participants.forEach((participant) => {
+        if (participant.status === "paid") return;
+
+        const isCurrentUser = Number(participant.userId) === Number(currentUser?.id);
+        const isCreator = Number(split.user_id) === Number(currentUser?.id);
+        if (isCurrentUser && !isCreator) {
+          const key = `owe-${split.user_id}`;
+          const existing = totals.get(key) || {
+            name: language === "es" ? "Tú" : "You",
+            amount: 0,
+            type: "owes" as const,
+          };
+          existing.amount += Number(participant.amount) || 0;
+          totals.set(key, existing);
+        } else if (isCreator && !isCurrentUser && participant.userId) {
+          const key = `owed-${participant.userId}`;
+          const existing = totals.get(key) || {
+            name: participant.name.replace(" (You)", ""),
+            amount: 0,
+            type: "owed" as const,
+          };
+          existing.amount += Number(participant.amount) || 0;
+          totals.set(key, existing);
+        }
+      });
+    });
+
+    return Array.from(totals.values()).filter((balance) => balance.amount > 0);
+  }, [currentUser?.id, language, splits]);
 
   return (
     <div className="p-6 space-y-8 pb-12 flex flex-col min-h-full">
-      
-      {/* Monthly Balance Summary */}
       <section>
         <div className="flex items-center justify-between mb-4 px-1">
-          <h2 className="text-xl font-black text-gray-900 tracking-tight">Monthly Balance</h2>
+          <h2 className="text-xl font-black text-gray-900 dark:text-gray-50 tracking-tight">
+            {language === "es" ? "Balance Actual" : "Current Balance"}
+          </h2>
         </div>
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-5">
-          {balances.map((b, i) => (
-            <div key={b.name} className={`flex items-center justify-between ${i !== balances.length - 1 ? 'pb-5 border-b border-gray-50' : ''}`}>
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-lg font-black text-gray-600 shrink-0">
-                  {b.name.charAt(0)}
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
+          {balances.length === 0 ? (
+            <p className="text-center text-gray-500 dark:text-gray-400 font-bold py-4">
+              {language === "es" ? "No hay balances pendientes." : "No pending balances."}
+            </p>
+          ) : (
+            balances.map((balance, index) => (
+              <div
+                key={`${balance.type}-${balance.name}`}
+                className={`flex items-center justify-between gap-3 ${
+                  index !== balances.length - 1 ? "pb-5 border-b border-gray-50 dark:border-gray-800" : ""
+                }`}
+              >
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-lg font-black text-gray-600 dark:text-gray-300 shrink-0">
+                    {balance.name.charAt(0)}
+                  </div>
+                  <span className="font-bold text-gray-900 dark:text-gray-50 text-lg truncate">{balance.name}</span>
                 </div>
-                <span className="font-bold text-gray-900 text-lg">{b.name}</span>
+                <div
+                  className={`font-black text-lg shrink-0 ${
+                    balance.type === "owed" ? "text-emerald-600" : "text-orange-500"
+                  }`}
+                >
+                  <span className="text-sm font-bold opacity-80 mr-1.5">
+                    {balance.type === "owed"
+                      ? language === "es"
+                        ? "debe"
+                        : "owes"
+                      : language === "es"
+                        ? "debes"
+                        : "you owe"}
+                  </span>
+                  ${balance.amount.toFixed(2)}
+                </div>
               </div>
-              <div className={`font-black text-lg ${b.type === 'owed' ? 'text-emerald-600' : 'text-orange-500'}`}>
-                <span className="text-sm font-bold opacity-80 mr-1.5">{b.type === 'owed' ? 'is owed' : 'owes'}</span> 
-                ${b.amount}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </section>
 
-      {/* Shared Expenses */}
       <section className="flex-1">
         <div className="flex items-center justify-between mb-4 px-1">
-          <h2 className="text-xl font-black text-gray-900 tracking-tight">This Month's Bills</h2>
-          <button 
-            onClick={() => navigate('/household/new')}
-            className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-full"
+          <h2 className="text-xl font-black text-gray-900 dark:text-gray-50 tracking-tight">
+            {language === "es" ? "Splits Compartidos" : "Shared Splits"}
+          </h2>
+          <button
+            onClick={() => navigate("/new")}
+            className="flex items-center gap-1 text-sm font-bold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-3 py-1.5 rounded-full"
           >
             <Plus size={16} strokeWidth={3} />
-            Add
+            {language === "es" ? "Agregar" : "Add"}
           </button>
         </div>
+
         <div className="space-y-3">
-          {expenses.map((exp) => {
-            const Icon = exp.icon;
-            return (
-              <div 
-                key={exp.id} 
-                onClick={() => navigate(`/household/${exp.id}`)}
-                className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all hover:border-gray-200"
-              >
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${exp.status === 'settled' || exp.status === 'paid' ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-600'}`}>
-                  <Icon size={24} />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-gray-900 text-lg">{exp.title}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    {exp.status === 'settled' || exp.status === 'paid' ? (
-                      <CheckCircle2 size={16} className="text-gray-400"/>
-                    ) : (
-                      <CircleDashed size={16} className="text-orange-500"/>
-                    )}
-                    <p className={`text-sm ${exp.status === 'settled' || exp.status === 'paid' ? 'text-gray-500 font-bold' : 'text-orange-600 font-bold'}`}>
-                      {exp.paidBy ? `Paid by ${exp.paidBy}` : exp.status.charAt(0).toUpperCase() + exp.status.slice(1)}
-                    </p>
+          {isLoading ? (
+            <p className="text-center text-gray-500 dark:text-gray-400 font-bold py-8">{t("loadingSplits")}</p>
+          ) : errorMessage ? (
+            <p className="text-center text-orange-600 font-bold py-8">{errorMessage}</p>
+          ) : splits.length === 0 ? (
+            <p className="text-center text-gray-500 dark:text-gray-400 font-bold py-8">{t("noSplitsFound")}</p>
+          ) : (
+            splits.map((split) => {
+              const settled = String(split.status).toLowerCase() === "settled";
+
+              return (
+                <div
+                  key={split.id}
+                  onClick={() => navigate(`/household/${split.id}`)}
+                  className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all"
+                >
+                  <div
+                    className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${
+                      settled
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                        : "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300"
+                    }`}
+                  >
+                    <Receipt size={24} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-gray-900 dark:text-gray-50 text-lg truncate">{split.title}</h4>
+                    <div className="flex items-center gap-2 mt-1">
+                      {settled ? (
+                        <CheckCircle2 size={16} className="text-gray-400" />
+                      ) : (
+                        <CircleDashed size={16} className="text-orange-500" />
+                      )}
+                      <p
+                        className={`text-sm capitalize ${
+                          settled ? "text-gray-500 font-bold" : "text-orange-600 font-bold"
+                        }`}
+                      >
+                        {split.status}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="font-black text-gray-900 dark:text-gray-50 text-xl shrink-0">
+                    ${Number(split.amount).toFixed(2)}
                   </div>
                 </div>
-                <div className="font-black text-gray-900 text-xl">${exp.amount}</div>
-              </div>
-            )
-          })}
+              );
+            })
+          )}
         </div>
       </section>
-
     </div>
   );
 }
