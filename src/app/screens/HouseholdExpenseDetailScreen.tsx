@@ -18,6 +18,7 @@ type Participant = {
 type Split = {
   id: number;
   user_id: number;
+  creator_name?: string;
   title: string;
   amount: number;
   status: string;
@@ -66,6 +67,13 @@ export function HouseholdExpenseDetailScreen() {
   const canMarkPaid = !isCreator && !isSuspended && myParticipant?.status !== "paid" && myParticipant?.status !== "suspended";
   const canDelete = isCreator;
   const canSuspend = isCreator && !isSettled && !isSuspended;
+  const creatorLabel = isCreator
+    ? language === "es"
+      ? "Creado por ti"
+      : "Created by you"
+    : language === "es"
+      ? `Creado por ${split?.creator_name || "un amigo"}`
+      : `Created by ${split?.creator_name || "a friend"}`;
   const paymentAmount = Number(myParticipant?.amount || 0);
   const walletBalance = Number(currentUser?.wallet_balance ?? 1000);
 
@@ -222,6 +230,9 @@ export function HouseholdExpenseDetailScreen() {
           <Receipt size={36} strokeWidth={1.5} />
         </div>
         <h2 className="text-xl font-bold text-gray-500 dark:text-gray-400 mb-2">{split.title}</h2>
+        <p className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">
+          {creatorLabel}
+        </p>
         <p className="text-5xl font-black text-gray-900 dark:text-gray-50 tracking-tight">
           ${Number(split.amount).toFixed(2)}
         </p>

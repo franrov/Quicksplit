@@ -75,6 +75,7 @@ const parseParticipants = (split) => {
 const formatSplit = (split) => ({
   id: split.id,
   user_id: split.user_id,
+  creator_name: split.creator_name || null,
   title: split.title,
   amount: split.amount,
   status: split.status,
@@ -897,8 +898,9 @@ app.get("/splits", (req, res) => {
 
   db.all(
     `
-      SELECT DISTINCT splits.*
+      SELECT DISTINCT splits.*, users.name AS creator_name
       FROM splits
+      LEFT JOIN users ON users.id = splits.user_id
       LEFT JOIN split_participants ON split_participants.split_id = splits.id
       WHERE (splits.user_id = ? OR split_participants.user_id = ?)
       AND COALESCE(splits.is_recurring, 0) = ?
@@ -925,8 +927,9 @@ app.get("/splits/:id", (req, res) => {
 
   db.get(
     `
-      SELECT DISTINCT splits.*
+      SELECT DISTINCT splits.*, users.name AS creator_name
       FROM splits
+      LEFT JOIN users ON users.id = splits.user_id
       LEFT JOIN split_participants ON split_participants.split_id = splits.id
       WHERE splits.id = ? AND (splits.user_id = ? OR split_participants.user_id = ?)
     `,

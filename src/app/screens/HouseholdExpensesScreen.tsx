@@ -16,6 +16,7 @@ type Participant = {
 type Split = {
   id: number;
   user_id: number;
+  creator_name?: string;
   title: string;
   amount: number;
   status: string;
@@ -182,6 +183,15 @@ export function HouseholdExpensesScreen() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-gray-900 dark:text-gray-50 text-lg truncate">{split.title}</h4>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 font-bold mt-0.5 truncate">
+                      {Number(split.user_id) === Number(currentUser?.id)
+                        ? language === "es"
+                          ? "Creado por ti"
+                          : "Created by you"
+                        : language === "es"
+                          ? `Creado por ${split.creator_name || "un amigo"}`
+                          : `Created by ${split.creator_name || "a friend"}`}
+                    </p>
                     <div className="flex items-center gap-2 mt-1">
                       {settled ? (
                         <CheckCircle2 size={16} className="text-gray-400" />

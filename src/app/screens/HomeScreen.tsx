@@ -343,6 +343,7 @@ export function HomeScreen() {
                       amount={`$${Number(split.amount).toFixed(2)}`}
                       status={split.status}
                       isCreator={Number(split.user_id) === Number(currentUser?.id)}
+                      creatorName={split.creator_name}
                       onClick={() => navigate(`/split/${split.id}`)}
                       onDelete={() => handleDeleteSplit(split.id)}
                       onSuspend={() => handleSuspendSplit(split.id)}
@@ -366,7 +367,7 @@ export function HomeScreen() {
   );
 }
 
-function SplitCard({ title, amount, status, isCreator, onClick, onDelete, onSuspend }: any) {
+function SplitCard({ title, amount, status, isCreator, creatorName, onClick, onDelete, onSuspend }: any) {
   const normalizedStatus = String(status).toLowerCase();
   const settled = normalizedStatus === "settled";
   const suspended = normalizedStatus === "suspended";
@@ -387,6 +388,9 @@ function SplitCard({ title, amount, status, isCreator, onClick, onDelete, onSusp
       </div>
       <div className="flex-1">
         <h4 className="font-bold text-gray-900">{title}</h4>
+        <p className="text-xs text-gray-400 font-bold mt-0.5">
+          {isCreator ? "Created by you" : `Created by ${creatorName || "a friend"}`}
+        </p>
         <div className="flex items-center gap-1.5 mt-1">
           {settled ? (
             <CheckCircle2 size={14} className="text-gray-400" />
