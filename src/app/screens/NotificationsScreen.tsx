@@ -10,6 +10,7 @@ import { apiUrl } from "../api";
 type Notification = {
   id: number;
   split_id: number;
+  is_recurring?: boolean;
   type: "balance" | "invite" | "payer_invite" | "reminder" | "paid";
   participant_id: string;
   participant_name: string;
@@ -74,7 +75,7 @@ export function NotificationsScreen() {
     } catch (error) {
       console.error("Error marking notification as read:", error);
     } finally {
-      navigate(`/split/${notification.split_id}`);
+      navigate(notification.is_recurring ? `/household/${notification.split_id}` : `/split/${notification.split_id}`);
     }
   };
 

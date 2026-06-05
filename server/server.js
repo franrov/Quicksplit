@@ -229,6 +229,7 @@ const formatNotification = (notification) => ({
   id: notification.id,
   user_id: notification.user_id,
   split_id: notification.split_id,
+  is_recurring: Boolean(notification.is_recurring),
   type: notification.type,
   participant_id: notification.participant_id,
   participant_name: notification.participant_name,
@@ -785,33 +786,50 @@ app.get("/notifications", (req, res) => {
 
   db.all(
     `
-      SELECT notifications.*
+      SELECT notifications.*, COALESCE(splits.is_recurring, 0) AS is_recurring
       FROM notifications
       LEFT JOIN splits ON splits.id = notifications.split_id
-      LEFT JOIN split_participants
-        ON split_participants.split_id = notifications.split_id
-        AND split_participants.user_id = notifications.user_id
+      LEFT JOIN split_participants AS recipient_participant
+        ON recipient_participant.split_id = notifications.split_id
+        AND recipient_participant.user_id = notifications.user_id
+      LEFT JOIN split_participants AS referenced_participant
+        ON referenced_participant.split_id = notifications.split_id
+        AND referenced_participant.participant_key = notifications.participant_id
       WHERE notifications.user_id = ?
       AND (notifications.split_id IS NULL OR splits.id IS NOT NULL)
       AND NOT (
         notifications.type = 'invite'
         AND (
-          COALESCE(split_participants.status, '') != 'invited'
+          COALESCE(recipient_participant.status, '') != 'invited'
           OR COALESCE(splits.status, '') IN ('settled', 'suspended')
         )
       )
       AND NOT (
         notifications.type = 'payer_invite'
         AND (
-          COALESCE(split_participants.status, '') != 'payer_invited'
+          COALESCE(recipient_participant.status, '') != 'payer_invited'
           OR COALESCE(splits.status, '') != 'awaiting_payer'
         )
       )
       AND NOT (
-        notifications.type IN ('balance', 'reminder')
+        notifications.type = 'balance'
         AND (
           COALESCE(splits.status, '') IN ('settled', 'suspended')
-          OR COALESCE(split_participants.status, '') IN ('paid', 'suspended')
+          OR (
+            notifications.participant_id = 'me'
+            AND COALESCE(recipient_participant.status, '') IN ('paid', 'suspended')
+          )
+          OR (
+            notifications.participant_id != 'me'
+            AND COALESCE(referenced_participant.status, '') IN ('paid', 'suspended')
+          )
+        )
+      )
+      AND NOT (
+        notifications.type = 'reminder'
+        AND (
+          COALESCE(splits.status, '') IN ('settled', 'suspended')
+          OR COALESCE(recipient_participant.status, '') IN ('paid', 'suspended')
         )
       )
       ORDER BY notifications.is_read ASC, datetime(notifications.created_at) DESC, notifications.id DESC
@@ -839,31 +857,48 @@ app.get("/notifications/unread-count", (req, res) => {
       SELECT COUNT(*) AS count
       FROM notifications
       LEFT JOIN splits ON splits.id = notifications.split_id
-      LEFT JOIN split_participants
-        ON split_participants.split_id = notifications.split_id
-        AND split_participants.user_id = notifications.user_id
+      LEFT JOIN split_participants AS recipient_participant
+        ON recipient_participant.split_id = notifications.split_id
+        AND recipient_participant.user_id = notifications.user_id
+      LEFT JOIN split_participants AS referenced_participant
+        ON referenced_participant.split_id = notifications.split_id
+        AND referenced_participant.participant_key = notifications.participant_id
       WHERE notifications.user_id = ?
       AND notifications.is_read = 0
       AND (notifications.split_id IS NULL OR splits.id IS NOT NULL)
       AND NOT (
         notifications.type = 'invite'
         AND (
-          COALESCE(split_participants.status, '') != 'invited'
+          COALESCE(recipient_participant.status, '') != 'invited'
           OR COALESCE(splits.status, '') IN ('settled', 'suspended')
         )
       )
       AND NOT (
         notifications.type = 'payer_invite'
         AND (
-          COALESCE(split_participants.status, '') != 'payer_invited'
+          COALESCE(recipient_participant.status, '') != 'payer_invited'
           OR COALESCE(splits.status, '') != 'awaiting_payer'
         )
       )
       AND NOT (
-        notifications.type IN ('balance', 'reminder')
+        notifications.type = 'balance'
         AND (
           COALESCE(splits.status, '') IN ('settled', 'suspended')
-          OR COALESCE(split_participants.status, '') IN ('paid', 'suspended')
+          OR (
+            notifications.participant_id = 'me'
+            AND COALESCE(recipient_participant.status, '') IN ('paid', 'suspended')
+          )
+          OR (
+            notifications.participant_id != 'me'
+            AND COALESCE(referenced_participant.status, '') IN ('paid', 'suspended')
+          )
+        )
+      )
+      AND NOT (
+        notifications.type = 'reminder'
+        AND (
+          COALESCE(splits.status, '') IN ('settled', 'suspended')
+          OR COALESCE(recipient_participant.status, '') IN ('paid', 'suspended')
         )
       )
     `,

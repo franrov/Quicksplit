@@ -17,6 +17,7 @@ type Participant = {
 type Split = {
   id: number;
   user_id: number;
+  payer_user_id?: number;
   title: string;
   amount: number;
   participants: Participant[];
@@ -71,9 +72,9 @@ export function ReminderMessageScreen() {
     () =>
       (split?.participants || []).filter(
         (participant) =>
-          participant.status !== "paid" &&
+          participant.status === "pending" &&
           participant.userId &&
-          Number(participant.userId) !== Number(split?.user_id)
+          Number(participant.userId) !== Number(split?.payer_user_id || split?.user_id)
       ),
     [split]
   );
