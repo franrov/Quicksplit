@@ -415,6 +415,17 @@ const createInviteNotifications = async ({ splitId, splitTitle, participants, ow
   return invitedParticipants.length;
 };
 
+const createInviteSentNotification = ({ userId, splitId, splitTitle, count }) => {
+  if (!count) return Promise.resolve(false);
+
+  const message = `Invitations sent to ${count} ${count === 1 ? "participant" : "participants"}.`;
+
+  return runDb(
+    "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, message, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+    [userId, splitId, "invite_sent", "creator", "Invitations sent", count, splitTitle, message]
+  ).then(() => true);
+};
+
 const createPayerInviteNotification = ({ userId, splitId, splitTitle, amount, payerName }) => {
   return runDb(
     "INSERT INTO notifications(user_id, split_id, type, participant_id, participant_name, amount, split_title, message, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
@@ -1133,11 +1144,17 @@ app.post("/splits", (req, res) => {
             payerName: selectedPayerName || "Selected payer",
           });
         } else {
-          await createInviteNotifications({
+          const inviteCount = await createInviteNotifications({
             splitId,
             splitTitle: title,
             participants: storedParticipants,
             ownerId: userId,
+          });
+          await createInviteSentNotification({
+            userId,
+            splitId,
+            splitTitle: title,
+            count: inviteCount,
           });
         }
       } catch (notificationErr) {

@@ -11,7 +11,7 @@ type Notification = {
   id: number;
   split_id: number;
   is_recurring?: boolean;
-  type: "balance" | "invite" | "payer_invite" | "reminder" | "paid";
+  type: "balance" | "invite" | "invite_sent" | "payer_invite" | "reminder" | "paid";
   participant_id: string;
   participant_name: string;
   amount: number;
@@ -211,6 +211,7 @@ function NotifCard({
 }) {
   const isPaid = notif.type === "paid";
   const isInvite = notif.type === "invite";
+  const isInviteSent = notif.type === "invite_sent";
   const isPayerInvite = notif.type === "payer_invite";
   const isReminderMessage = notif.type === "reminder";
   const amount = Number(notif.amount || 0).toFixed(2);
@@ -220,6 +221,10 @@ function NotifCard({
       ? language === "es"
         ? `Solicitud de pago: ${notif.split_title}`
         : `Payment request: ${notif.split_title}`
+      : isInviteSent
+      ? language === "es"
+        ? `Invitaciones enviadas: ${notif.split_title}`
+        : `Invitations sent: ${notif.split_title}`
       : isInvite
       ? language === "es"
         ? `Invitación: ${notif.split_title}`
@@ -244,6 +249,8 @@ function NotifCard({
       ? language === "es"
         ? `Monto a pagar: $${amount}. Responde desde inicio.`
         : `Amount to fund: $${amount}. Respond from Home.`
+      : isInviteSent
+      ? notif.message || (language === "es" ? "Se enviaron invitaciones a los participantes." : "Invitations were sent to participants.")
       : isInvite
       ? language === "es"
         ? `Tu parte: $${amount}. Responde desde inicio.`
@@ -271,6 +278,8 @@ function NotifCard({
         className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
           isPaid
             ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300"
+            : isInviteSent
+            ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300"
             : "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300"
         }`}
       >
